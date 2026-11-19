@@ -333,8 +333,8 @@ class _CreateTournamentScreenState extends ConsumerState<CreateTournamentScreen>
 
           AppTextField(
             controller: _nameController,
-            label: 'Tournament Name *',
-            hint: 'e.g. Mumbai Premier T20 Cup 2026',
+            labelText: 'Tournament Name *',
+            hintText: 'e.g. Mumbai Premier T20 Cup 2026',
             prefixIcon: const Icon(Icons.emoji_events_outlined),
             validator: (v) {
               if (v == null || v.trim().length < 3) {
@@ -347,8 +347,8 @@ class _CreateTournamentScreenState extends ConsumerState<CreateTournamentScreen>
 
           AppTextField(
             controller: _descriptionController,
-            label: 'Tournament Description',
-            hint: 'Describe the tournament format, sponsor highlights, or prizes...',
+            labelText: 'Tournament Description',
+            hintText: 'Describe the tournament format, sponsor highlights, or prizes...',
             maxLines: 4,
             prefixIcon: const Icon(Icons.description_outlined),
           ),
@@ -356,8 +356,8 @@ class _CreateTournamentScreenState extends ConsumerState<CreateTournamentScreen>
 
           AppTextField(
             controller: _bannerUrlController,
-            label: 'Banner Image URL (Optional)',
-            hint: 'https://images.unsplash.com/...',
+            labelText: 'Banner Image URL (Optional)',
+            hintText: 'https://images.unsplash.com/...',
             prefixIcon: const Icon(Icons.image_outlined),
           ),
         ],
@@ -454,8 +454,8 @@ class _CreateTournamentScreenState extends ConsumerState<CreateTournamentScreen>
             const SizedBox(height: 16),
             AppTextField(
               controller: _customOversController,
-              label: 'Overs Per Innings',
-              hint: 'e.g. 15',
+              labelText: 'Overs Per Innings',
+              hintText: 'e.g. 15',
               keyboardType: TextInputType.number,
               prefixIcon: const Icon(Icons.timer_outlined),
               validator: (v) {
@@ -576,8 +576,8 @@ class _CreateTournamentScreenState extends ConsumerState<CreateTournamentScreen>
           // City
           AppTextField(
             controller: _cityController,
-            label: 'Host City / Region *',
-            hint: 'e.g. Mumbai, Bengaluru, Pune',
+            labelText: 'Host City / Region *',
+            hintText: 'e.g. Mumbai, Bengaluru, Pune',
             prefixIcon: const Icon(Icons.location_city_outlined),
             validator: (v) => (v == null || v.trim().isEmpty) ? 'Please specify city' : null,
           ),
@@ -592,10 +592,10 @@ class _CreateTournamentScreenState extends ConsumerState<CreateTournamentScreen>
               Expanded(
                 child: AppTextField(
                   controller: _venueController,
-                  label: 'Add Venue',
-                  hint: 'e.g. Wankhede Stadium',
+                  labelText: 'Add Venue',
+                  hintText: 'e.g. Wankhede Stadium',
                   prefixIcon: const Icon(Icons.stadium_outlined),
-                  onSubmitted: (_) => _addVenue(),
+                  onFieldSubmitted: (_) => _addVenue(),
                 ),
               ),
               const SizedBox(width: 8),
@@ -663,8 +663,8 @@ class _CreateTournamentScreenState extends ConsumerState<CreateTournamentScreen>
               Expanded(
                 child: AppTextField(
                   controller: _maxTeamsController,
-                  label: 'Max Teams *',
-                  hint: '8',
+                  labelText: 'Max Teams *',
+                  hintText: '8',
                   keyboardType: TextInputType.number,
                   prefixIcon: const Icon(Icons.groups_outlined),
                   validator: (v) {
@@ -680,8 +680,8 @@ class _CreateTournamentScreenState extends ConsumerState<CreateTournamentScreen>
               Expanded(
                 child: AppTextField(
                   controller: _maxPlayersController,
-                  label: 'Players / Team *',
-                  hint: '15',
+                  labelText: 'Players / Team *',
+                  hintText: '15',
                   keyboardType: TextInputType.number,
                   prefixIcon: const Icon(Icons.person_outline),
                   validator: (v) {
@@ -700,8 +700,8 @@ class _CreateTournamentScreenState extends ConsumerState<CreateTournamentScreen>
 
           AppTextField(
             controller: _registrationFeeController,
-            label: 'Registration Fee (₹) *',
-            hint: '0 for Free Tournament',
+            labelText: 'Registration Fee (₹) *',
+            hintText: '0 for Free Tournament',
             keyboardType: TextInputType.number,
             prefixIcon: const Icon(Icons.currency_rupee_rounded),
             helperText: 'Enter 0 if tournament participation is free.',
@@ -717,8 +717,8 @@ class _CreateTournamentScreenState extends ConsumerState<CreateTournamentScreen>
 
           AppTextField(
             controller: _rulesController,
-            label: 'Tournament Rules & Guidelines',
-            hint: 'Powerplay rules, reporting time, tie breaker, umpire decisions...',
+            labelText: 'Tournament Rules & Guidelines',
+            hintText: 'Powerplay rules, reporting time, tie breaker, umpire decisions...',
             maxLines: 5,
             prefixIcon: const Icon(Icons.rule_folder_outlined),
           ),

@@ -38,14 +38,14 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
 
     final identifier = _identifierController.text.trim();
-    final success = await ref
+    final userId = await ref
         .read(authStateProvider.notifier)
         .forgotPassword(emailOrPhone: identifier);
 
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (success) {
+    if (userId != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Verification code sent successfully. Check your inbox!'),
@@ -53,10 +53,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         ),
       );
 
-      // Navigate to Reset Password Screen with the identifier
       context.push(
         AppRoutes.resetPassword,
-        extra: {'identifier': identifier},
+        extra: {'userId': userId, 'identifier': identifier},
       );
     } else {
       final authState = ref.read(authStateProvider);

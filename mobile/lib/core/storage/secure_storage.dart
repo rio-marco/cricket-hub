@@ -8,11 +8,7 @@ class SecureStorage {
 
   SecureStorage(this._storage);
 
-  /// Default options configured with Android EncryptedSharedPreferences
-  /// and iOS Keychain accessibility.
-  static const AndroidOptions defaultAndroidOptions = AndroidOptions(
-    encryptedSharedPreferences: true,
-  );
+  static const AndroidOptions defaultAndroidOptions = AndroidOptions();
 
   static const IOSOptions defaultIosOptions = IOSOptions(
     accessibility: KeychainAccessibility.first_unlock,
@@ -103,6 +99,23 @@ class SecureStorage {
   Future<void> deleteUser() async {
     await _storage.delete(
       key: AppConstants.userDataKey,
+      aOptions: defaultAndroidOptions,
+      iOptions: defaultIosOptions,
+    );
+  }
+
+  Future<String?> getString(String key) async {
+    return await _storage.read(
+      key: key,
+      aOptions: defaultAndroidOptions,
+      iOptions: defaultIosOptions,
+    );
+  }
+
+  Future<void> saveString(String key, String value) async {
+    await _storage.write(
+      key: key,
+      value: value,
       aOptions: defaultAndroidOptions,
       iOptions: defaultIosOptions,
     );

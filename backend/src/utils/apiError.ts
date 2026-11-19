@@ -57,6 +57,10 @@ export class ApiError extends Error {
     return new ApiError(409, message, errors);
   }
 
+  public static tooManyRequests(message: string = 'Too many requests', errors: any[] = []): ApiError {
+    return new ApiError(429, message, errors);
+  }
+
   /**
    * 500 Internal Server Error
    */

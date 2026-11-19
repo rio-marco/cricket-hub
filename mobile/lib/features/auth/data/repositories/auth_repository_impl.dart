@@ -34,12 +34,8 @@ class AuthRepositoryImpl implements AuthRepository {
         password,
       );
 
-      if (response.accessToken.isNotEmpty) {
-        await _secureStorage.saveToken(response.accessToken);
-      }
-      if (response.refreshToken.isNotEmpty) {
-        await _secureStorage.saveRefreshToken(response.refreshToken);
-      }
+      await _secureStorage.deleteToken();
+      await _secureStorage.deleteRefreshToken();
       await _secureStorage.saveUser(jsonEncode(response.user.toJson()));
 
       return response;
@@ -82,21 +78,51 @@ class AuthRepositoryImpl implements AuthRepository {
     try {
       final result = await _remoteDataSource.verifyOTP(userId, otp);
 
-      // If backend returns new tokens upon OTP verification, persist them
-      final token = result['token'] ?? result['accessToken'] ?? result['data']?['token'];
+      final tokens = _mapOf(result['tokens']) ??
+          _mapOf(_mapOf(result['data'])?['tokens']) ??
+          _mapOf(result['data']) ??
+          result;
+      final token = tokens['accessToken'] ??
+          tokens['token'] ??
+          tokens['access_token'] ??
+          result['accessToken'] ??
+          result['token'];
+      final refreshToken = tokens['refreshToken'] ??
+          tokens['refresh_token'] ??
+          result['refreshToken'] ??
+          result['refresh_token'];
+      final userMap = result['user'] ??
+          _mapOf(result['data'])?['user'] ??
+          _mapOf(_mapOf(result['data'])?['data']);
+
       if (token != null && token.toString().isNotEmpty) {
         await _secureStorage.saveToken(token.toString());
       }
-      final refreshToken = result['refreshToken'] ?? result['data']?['refreshToken'];
       if (refreshToken != null && refreshToken.toString().isNotEmpty) {
         await _secureStorage.saveRefreshToken(refreshToken.toString());
       }
-      final userMap = result['user'] ?? result['data']?['user'];
       if (userMap is Map<String, dynamic>) {
-        await _secureStorage.saveUser(jsonEncode(userMap));
+        await _secureStorage.saveUser(jsonEncode(Map<String, dynamic>.from(userMap)));
       }
 
       return result;
+    } on AppException catch (e) {
+      throw Failure.fromException(e);
+    } catch (e) {
+      throw ServerFailure(message: e.toString());
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> resendOTP({
+    String? userId,
+    String? emailOrPhone,
+  }) async {
+    try {
+      return await _remoteDataSource.resendOTP(
+        userId: userId,
+        emailOrPhone: emailOrPhone,
+      );
     } on AppException catch (e) {
       throw Failure.fromException(e);
     } catch (e) {
@@ -212,8 +238,17 @@ class AuthRepositoryImpl implements AuthRepository {
         final profile = await _remoteDataSource.getProfile();
         await _secureStorage.saveUser(jsonEncode(profile.toJson()));
         return profile;
+      } on UnauthorizedException catch (_) {
+        await _secureStorage.deleteToken();
+        await _secureStorage.deleteRefreshToken();
+        await _secureStorage.deleteUser();
+        return null;
+      } on ForbiddenException catch (_) {
+        await _secureStorage.deleteToken();
+        await _secureStorage.deleteRefreshToken();
+        await _secureStorage.deleteUser();
+        return null;
       } catch (_) {
-        // Fallback to locally cached user if offline
         return await getStoredUser();
       }
     } catch (_) {
@@ -239,5 +274,11 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<bool> isAuthenticated() async {
     return await _secureStorage.hasToken();
+  }
+
+  Map<String, dynamic>? _mapOf(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return null;
   }
 }

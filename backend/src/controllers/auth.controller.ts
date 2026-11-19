@@ -47,7 +47,17 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response): Promi
     res,
     200,
     result.message,
-    result.user
+    result
+  );
+});
+
+export const resendOTP = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const result = await authService.resendOTP(req.body);
+  ApiResponse.success(
+    res,
+    200,
+    result.message,
+    result
   );
 });
 
@@ -200,6 +210,7 @@ export default {
   register,
   login,
   verifyOTP,
+  resendOTP,
   forgotPassword,
   resetPassword,
   changePassword,

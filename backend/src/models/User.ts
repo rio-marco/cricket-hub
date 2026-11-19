@@ -2,9 +2,15 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 import bcrypt from 'bcrypt';
 import { UserRole } from '../constants/roles';
 
+export type OtpPurpose = 'VERIFICATION' | 'PASSWORD_RESET';
+
 export interface IUserOtp {
   code?: string;
   expiresAt?: Date;
+  purpose?: OtpPurpose;
+  attempts?: number;
+  resendCount?: number;
+  lastSentAt?: Date;
 }
 
 export interface IUser {
@@ -36,6 +42,21 @@ const userOtpSchema = new Schema<IUserOtp>(
       trim: true,
     },
     expiresAt: {
+      type: Date,
+    },
+    purpose: {
+      type: String,
+      enum: ['VERIFICATION', 'PASSWORD_RESET'],
+    },
+    attempts: {
+      type: Number,
+      default: 0,
+    },
+    resendCount: {
+      type: Number,
+      default: 0,
+    },
+    lastSentAt: {
       type: Date,
     },
   },

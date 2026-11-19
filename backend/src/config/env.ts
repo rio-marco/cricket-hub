@@ -13,6 +13,9 @@ export interface IConfig {
   JWT_REFRESH_EXPIRE: string;
   OTP_EXPIRY: number; // in minutes
   OTP_LENGTH: number;
+  OTP_MAX_ATTEMPTS: number;
+  OTP_MAX_RESENDS: number;
+  OTP_RESEND_COOLDOWN_SECONDS: number;
   NODE_ENV: 'development' | 'production' | 'test';
   SMS_PROVIDER: string;
   UPLOAD_DIR: string;
@@ -37,6 +40,9 @@ export const config: IConfig = {
   JWT_REFRESH_EXPIRE: process.env.JWT_REFRESH_EXPIRE || '7d',
   OTP_EXPIRY: parseInt(process.env.OTP_EXPIRY || '5', 10),
   OTP_LENGTH: parseInt(process.env.OTP_LENGTH || '6', 10),
+  OTP_MAX_ATTEMPTS: parseInt(process.env.OTP_MAX_ATTEMPTS || '5', 10),
+  OTP_MAX_RESENDS: parseInt(process.env.OTP_MAX_RESENDS || '3', 10),
+  OTP_RESEND_COOLDOWN_SECONDS: parseInt(process.env.OTP_RESEND_COOLDOWN_SECONDS || '60', 10),
   NODE_ENV: nodeEnv,
   SMS_PROVIDER: process.env.SMS_PROVIDER || 'mock',
   UPLOAD_DIR: process.env.UPLOAD_DIR || 'uploads',
@@ -49,6 +55,25 @@ export const config: IConfig = {
   isDevelopment: nodeEnv === 'development',
   isTest: nodeEnv === 'test',
 };
+
+if (config.isProduction) {
+  const insecureSecrets = [
+    'cricket_hub_jwt_secret_key_change_in_production',
+    'cricket_hub_refresh_secret_key_change_in_production',
+  ];
+  if (
+    insecureSecrets.includes(config.JWT_SECRET) ||
+    insecureSecrets.includes(config.JWT_REFRESH_SECRET) ||
+    config.JWT_SECRET.length < 32 ||
+    config.JWT_REFRESH_SECRET.length < 32 ||
+    config.JWT_SECRET === config.JWT_REFRESH_SECRET
+  ) {
+    throw new Error('Production requires strong, distinct JWT_SECRET and JWT_REFRESH_SECRET values.');
+  }
+  if (config.CORS_ORIGIN === '*') {
+    throw new Error('Production requires an explicit CORS_ORIGIN; wildcard origins are not allowed.');
+  }
+}
 
 export const env = config;
 export default config;

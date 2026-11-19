@@ -121,9 +121,20 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
       return;
     }
 
-    final effectiveUserId = widget.userId ?? 'pending_verification';
+    final userId = widget.userId?.trim();
+    if (userId == null || userId.isEmpty) {
+      setState(() => _hasError = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Verification session expired. Please register again.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     final success = await ref.read(authStateProvider.notifier).verifyOTP(
-      userId: effectiveUserId,
+      userId: userId,
       otp: otp,
     );
 
@@ -156,9 +167,38 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen> {
   Future<void> _handleResend() async {
     if (!_canResend) return;
 
+    final userId = widget.userId?.trim();
+    if (userId == null || userId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Verification session expired. Please register again.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    final success = await ref
+        .read(authStateProvider.notifier)
+        .resendOTP(userId: userId);
+
+    if (!mounted) return;
+
+    if (!success) {
+      final authState = ref.read(authStateProvider);
+      final errorMsg = authState is AuthError
+          ? authState.message
+          : 'Could not send a new code. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMsg), backgroundColor: AppColors.error),
+      );
+      return;
+    }
+
     for (final c in _controllers) {
       c.clear();
     }
+    setState(() => _hasError = false);
     _focusNodes[0].requestFocus();
     _startCountdown();
 

@@ -68,7 +68,16 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
 
     final otp = _otpController.text.trim();
     final newPassword = _newPasswordController.text;
-    final targetUserId = widget.userId ?? 'pending_reset';
+    final targetUserId = widget.userId?.trim();
+    if (targetUserId == null || targetUserId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Reset session expired. Please request a new code.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
 
     final success = await ref.read(authStateProvider.notifier).resetPassword(
       userId: targetUserId,

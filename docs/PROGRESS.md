@@ -80,6 +80,43 @@
 - [x] Screens: Splash, Onboarding, Login, Register, OTP, Forgot Password, Reset Password
 - [x] Widgets: AuthHeader, PasswordStrengthIndicator, OTPInputField
 
+## PHASE 4A: AUTHENTICATION HARDENING ✅
+### Backend
+- [x] Public registration always creates `NORMAL_USER`; privileged roles are rejected
+- [x] Registration returns `{ user, userId }` and does not issue tokens before OTP verification
+- [x] OTP values are bcrypt-hashed before storage and verified with `bcrypt.compare`
+- [x] OTP records track purpose, attempts, resend count, and last sent time
+- [x] Added `POST /auth/resend-otp` with attempt cooldown, resend limit, and rate limiting
+- [x] OTP verification issues access/refresh tokens only after success
+- [x] Refresh tokens are SHA-256 hashed in MongoDB and atomically rotated
+- [x] Logout revokes the hashed refresh token
+- [x] `protect` middleware rejects unverified users
+- [x] Production config rejects placeholder JWT secrets and wildcard CORS origins
+- [x] CORS uses credentials only for explicit allowlists
+
+### Flutter
+- [x] Pinned Riverpod 2.6.1 and removed unused Riverpod generator packages
+- [x] Fixed Flutter/Dart API drift in theme, dashboard, match, and tournament screens
+- [x] `SecureStorage` uses default `AndroidOptions()` and exposes generic secure string helpers
+- [x] `AuthResponse` parses nested `{ data: { tokens: ... } }` payloads
+- [x] `ApiClient` avoids refresh loops on public auth routes and parses rotated tokens correctly
+- [x] Registration navigates to OTP with the real backend `userId`
+- [x] OTP resend is wired to `POST /auth/resend-otp`
+- [x] Forgot password returns the real backend `userId` for reset
+- [x] Removed placeholder user IDs from OTP and password reset flows
+- [x] Avatar upload uses `PUT /auth/avatar`
+
+### Tests
+- [x] Backend auth service unit tests (8 tests total, all passing)
+- [x] Backend auth validator tests
+- [x] Flutter auth response parsing tests
+- [x] Flutter `AuthNotifier` registration, OTP, and password-reset tests
+- [x] `npm run lint` passed
+- [x] `npm test` passed: 2 suites, 8 tests
+- [x] `flutter pub get` passed
+- [x] `flutter analyze` has no errors (remaining lints/deprecation notices only)
+- [x] `flutter test` passed: 6 tests
+
 ## PHASE 5: TEAM & PLAYER MANAGEMENT 🔄
 - [ ] Backend: Team CRUD service/controller/routes
 - [ ] Backend: Player CRUD service/controller/routes
@@ -91,12 +128,15 @@
 - [ ] Flutter: Home dashboard screen
 
 ## Current Status
-- Backend: 43 TypeScript files, 0 compilation errors
-- Flutter: 37 Dart files
-- Phases 1-4 complete
+- Backend authentication hardened and covered by isolated unit tests
+- Flutter auth/session flow aligned with backend payloads and Riverpod 2
+- Backend: TypeScript compilation passes with 0 errors
+- Flutter: analyzer passes with 0 errors; remaining notices are lints/deprecations
+- Phases 1-4 and Phase 4A complete
 - Phase 5 in progress
 
 ## Next Steps
 - Complete Phase 5: Team & Player Management
 - Phase 6: Tournament Management
 - Phase 7: Match Creation & Toss
+- Run MongoDB integration verification before production deployment

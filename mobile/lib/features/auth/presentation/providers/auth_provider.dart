@@ -129,7 +129,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   /// Registers a new user account.
-  Future<bool> register({
+  Future<String?> register({
     required String name,
     required String email,
     required String phone,
@@ -143,14 +143,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
         phone: phone.trim(),
         password: password,
       );
-      state = AuthState.authenticated(response.user);
-      return true;
+      final userId = response.user.id;
+      if (userId.isEmpty) {
+        throw StateError('Registration response did not include a user ID.');
+      }
+      state = const AuthState.unauthenticated();
+      return userId;
     } on Failure catch (f) {
       state = AuthState.error(f.message);
-      return false;
+      return null;
     } catch (e) {
       state = AuthState.error(e.toString());
-      return false;
+      return null;
     }
   }
 
@@ -166,20 +170,36 @@ class AuthNotifier extends StateNotifier<AuthState> {
         otp: otp,
       );
 
-      // Check if user object was returned in OTP response
-      final userMap = result['user'] ?? result['data']?['user'];
+      final userMap = result['user'] ??
+          result['data']?['user'] ??
+          result['data']?['data'];
+      User? user;
       if (userMap is Map<String, dynamic>) {
-        state = AuthState.authenticated(User.fromJson(userMap));
-        return true;
+        user = User.fromJson(userMap);
+      } else if (userMap is Map) {
+        user = User.fromJson(Map<String, dynamic>.from(userMap));
       }
+      user ??= await _authRepository.checkAuth();
+      if (user == null) {
+        throw StateError('OTP verification did not return an authenticated user.');
+      }
+      state = AuthState.authenticated(user);
+      return true;
+    } on Failure catch (f) {
+      state = AuthState.error(f.message);
+      return false;
+    } catch (e) {
+      state = AuthState.error(e.toString());
+      return false;
+    }
+  }
 
-      // Check if session became active
-      final user = await _authRepository.checkAuth();
-      if (user != null) {
-        state = AuthState.authenticated(user);
-      } else {
-        state = const AuthState.unauthenticated();
-      }
+  /// Sends a fresh OTP for an account that is still pending verification.
+  Future<bool> resendOTP({required String userId}) async {
+    state = const AuthState.loading();
+    try {
+      await _authRepository.resendOTP(userId: userId.trim());
+      state = const AuthState.unauthenticated();
       return true;
     } on Failure catch (f) {
       state = AuthState.error(f.message);
@@ -191,16 +211,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   /// Requests password reset OTP.
-  Future<bool> forgotPassword({required String emailOrPhone}) async {
+  Future<String?> forgotPassword({required String emailOrPhone}) async {
     try {
-      await _authRepository.forgotPassword(emailOrPhone: emailOrPhone.trim());
-      return true;
+      final result = await _authRepository.forgotPassword(
+        emailOrPhone: emailOrPhone.trim(),
+      );
+      final userId = result['userId'] ?? result['data']?['userId'];
+      if (userId == null || userId.toString().isEmpty) {
+        throw StateError('Password reset response did not include a user ID.');
+      }
+      return userId.toString();
     } on Failure catch (f) {
       state = AuthState.error(f.message);
-      return false;
+      return null;
     } catch (e) {
       state = AuthState.error(e.toString());
-      return false;
+      return null;
     }
   }
 
@@ -212,8 +238,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     state = const AuthState.loading();
     try {
+      if (userId.trim().isEmpty) {
+        throw StateError('A valid password reset request is required.');
+      }
       await _authRepository.resetPassword(
-        userId: userId,
+        userId: userId.trim(),
         otp: otp,
         newPassword: newPassword,
       );

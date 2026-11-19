@@ -47,6 +47,16 @@ export const authLimiter = rateLimit({
   skip: () => env.isTest,
 });
 
+export const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: 'Too many verification code requests from this IP, please try again after 15 minutes.',
+  handler: rateLimitHandler,
+  skip: () => env.isTest,
+});
+
 /**
  * Live Cricket Scoring Rate Limiter
  * Permissive: 200 requests per 15 minutes to allow rapid ball-by-ball updates
@@ -64,5 +74,6 @@ export const scoringLimiter = rateLimit({
 export default {
   apiLimiter,
   authLimiter,
+  otpLimiter,
   scoringLimiter,
 };

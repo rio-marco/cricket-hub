@@ -1,4 +1,4 @@
-import '../../teams/domain/entities/team.dart';
+import '../../../teams/domain/entities/team.dart';
 
 /// Lightweight match representation for live feeds, dashboard, and match preview cards.
 class DashboardMatch {

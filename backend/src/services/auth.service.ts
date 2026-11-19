@@ -1,10 +1,14 @@
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
 import { env } from '../config/env';
 import { MESSAGES } from '../constants/messages';
 import { ApiError } from '../utils/apiError';
-import { logger } from '../utils/logger';
-import { generateOTP, isOTPExpired } from '../utils/otp';
+import {
+  generateOTP,
+  hashOTP,
+  hashRefreshToken,
+  isOTPExpired,
+  verifyOTPHash,
+} from '../utils/otp';
 import User, { IUser } from '../models/User';
 import RefreshToken from '../models/RefreshToken';
 
@@ -30,7 +34,9 @@ export interface IAuthTokens {
 
 export interface IAuthResult {
   user: Partial<IUser> & { _id: string };
-  tokens: IAuthTokens;
+  userId?: string;
+  tokens?: IAuthTokens;
+  message?: string;
   otp?: string;
 }
 
@@ -92,10 +98,9 @@ export class AuthService {
 
     const expiresAt = this.calculateExpiryDate(env.JWT_REFRESH_EXPIRE || '7d');
 
-    // Store refresh token in database
     await RefreshToken.create({
       user: userId,
-      token: refreshToken,
+      token: hashRefreshToken(refreshToken),
       expiresAt,
       isRevoked: false,
     });
@@ -107,11 +112,7 @@ export class AuthService {
     };
   }
 
-  /**
-   * Register a new user, generate verification OTP, and return initial session tokens
-   */
   public async register(data: IRegisterData): Promise<IAuthResult> {
-    // Check if email already in use
     if (data.email) {
       const existingEmail = await User.findOne({ email: data.email.toLowerCase() });
       if (existingEmail) {
@@ -119,7 +120,6 @@ export class AuthService {
       }
     }
 
-    // Check if phone number already in use
     if (data.phone) {
       const existingPhone = await User.findOne({ phone: data.phone });
       if (existingPhone) {
@@ -127,33 +127,32 @@ export class AuthService {
       }
     }
 
-    // Generate verification OTP
-    const otpLength = env.OTP_LENGTH || 6;
-    const otpCode = generateOTP(otpLength);
-    const otpExpiryMinutes = env.OTP_EXPIRY || 5;
-    const expiresAt = new Date(Date.now() + otpExpiryMinutes * 60 * 1000);
+    const otpCode = generateOTP(env.OTP_LENGTH || 6);
+    const otpHash = await hashOTP(otpCode);
+    const expiresAt = new Date(Date.now() + (env.OTP_EXPIRY || 5) * 60 * 1000);
 
     const newUser = await User.create({
       name: data.name.trim(),
       email: data.email ? data.email.toLowerCase().trim() : undefined,
       phone: data.phone ? data.phone.trim() : undefined,
       password: data.password,
-      role: data.role || 'NORMAL_USER',
+      role: 'NORMAL_USER',
       isVerified: false,
       isBlocked: false,
       otp: {
-        code: otpCode,
+        code: otpHash,
         expiresAt,
+        purpose: 'VERIFICATION',
+        attempts: 0,
+        resendCount: 0,
+        lastSentAt: new Date(),
       },
     });
 
-    logger.info(`[AuthService] Generated registration OTP for ${newUser.email || newUser.phone}: ${otpCode}`);
-
-    const tokens = await this.generateTokens(newUser);
-
     return {
       user: this.sanitizeUser(newUser),
-      tokens,
+      userId: newUser._id.toString(),
+      message: MESSAGES.AUTH.REGISTER_SUCCESS,
       otp: env.isDevelopment ? otpCode : undefined,
     };
   }
@@ -200,28 +199,104 @@ export class AuthService {
   public async verifyOTP(
     userId: string,
     otp: string
-  ): Promise<{ user: Partial<IUser> & { _id: string }; message: string }> {
+  ): Promise<{ user: Partial<IUser> & { _id: string }; tokens: IAuthTokens; message: string }> {
     const user = await User.findById(userId);
     if (!user) {
       throw ApiError.notFound(MESSAGES.AUTH.USER_NOT_FOUND || 'User not found.');
     }
 
-    if (!user.otp || !user.otp.code || user.otp.code !== otp.trim()) {
+    if (user.isVerified) {
+      throw ApiError.badRequest(MESSAGES.AUTH.ACCOUNT_ALREADY_VERIFIED || 'This account is already verified.');
+    }
+
+    if (!user.otp || !user.otp.code) {
       throw ApiError.badRequest(MESSAGES.AUTH.INVALID_OTP || 'Invalid or incorrect OTP.');
+    }
+
+    if (user.otp.purpose && user.otp.purpose !== 'VERIFICATION') {
+      throw ApiError.badRequest(MESSAGES.AUTH.OTP_PURPOSE_INVALID || 'This verification code cannot be used for this action.');
     }
 
     if (user.otp.expiresAt && isOTPExpired(user.otp.expiresAt)) {
       throw ApiError.badRequest(MESSAGES.AUTH.OTP_EXPIRED || 'OTP has expired. Please request a new one.');
     }
 
-    // Mark user as verified and clear OTP
+    if ((user.otp.attempts ?? 0) >= env.OTP_MAX_ATTEMPTS) {
+      throw ApiError.tooManyRequests(MESSAGES.AUTH.OTP_ATTEMPTS_EXCEEDED || 'Too many incorrect OTP attempts.');
+    }
+
+    const isOtpValid = await verifyOTPHash(otp.trim(), user.otp.code);
+    if (!isOtpValid) {
+      user.otp.attempts = (user.otp.attempts ?? 0) + 1;
+      await user.save();
+      throw ApiError.badRequest(MESSAGES.AUTH.INVALID_OTP || 'Invalid or incorrect OTP.');
+    }
+
     user.isVerified = true;
     user.otp = undefined;
     await user.save();
 
     return {
       user: this.sanitizeUser(user),
+      tokens: await this.generateTokens(user),
       message: MESSAGES.AUTH.OTP_VERIFIED || 'OTP verified successfully.',
+    };
+  }
+
+  public async resendOTP(data: {
+    userId?: string;
+    email?: string;
+    phone?: string;
+  }): Promise<{ userId: string; message: string; otp?: string }> {
+    const query: any = {};
+    if (data.userId) {
+      query._id = data.userId;
+    } else if (data.email) {
+      query.email = data.email.toLowerCase().trim();
+    } else if (data.phone) {
+      query.phone = data.phone.trim();
+    } else {
+      throw ApiError.badRequest('A user ID, email, or phone number is required.');
+    }
+
+    const user = await User.findOne(query);
+    if (!user) {
+      throw ApiError.notFound(MESSAGES.AUTH.USER_NOT_FOUND || 'User not found.');
+    }
+
+    if (user.isVerified) {
+      throw ApiError.badRequest(MESSAGES.AUTH.ACCOUNT_ALREADY_VERIFIED || 'This account is already verified.');
+    }
+
+    const cooldownMs = env.OTP_RESEND_COOLDOWN_SECONDS * 1000;
+    if (user.otp?.lastSentAt && Date.now() - new Date(user.otp.lastSentAt).getTime() < cooldownMs) {
+      throw ApiError.tooManyRequests(
+        MESSAGES.AUTH.OTP_RESEND_COOLDOWN || 'Please wait before requesting another verification code.'
+      );
+    }
+
+    if ((user.otp?.resendCount ?? 0) >= env.OTP_MAX_RESENDS) {
+      throw ApiError.tooManyRequests(
+        MESSAGES.AUTH.OTP_RESEND_LIMIT || 'The maximum number of OTP resends has been reached.'
+      );
+    }
+
+    const otpCode = generateOTP(env.OTP_LENGTH || 6);
+    const otpHash = await hashOTP(otpCode);
+    user.otp = {
+      code: otpHash,
+      expiresAt: new Date(Date.now() + (env.OTP_EXPIRY || 5) * 60 * 1000),
+      purpose: 'VERIFICATION',
+      attempts: 0,
+      resendCount: (user.otp?.resendCount ?? 0) + 1,
+      lastSentAt: new Date(),
+    };
+    await user.save();
+
+    return {
+      userId: user._id.toString(),
+      message: MESSAGES.AUTH.OTP_SENT || 'A new verification code has been sent.',
+      otp: env.isDevelopment ? otpCode : undefined,
     };
   }
 
@@ -246,16 +321,18 @@ export class AuthService {
     }
 
     const otpCode = generateOTP(env.OTP_LENGTH || 6);
-    const otpExpiryMinutes = env.OTP_EXPIRY || 5;
-    const expiresAt = new Date(Date.now() + otpExpiryMinutes * 60 * 1000);
+    const otpHash = await hashOTP(otpCode);
+    const expiresAt = new Date(Date.now() + (env.OTP_EXPIRY || 5) * 60 * 1000);
 
     user.otp = {
-      code: otpCode,
+      code: otpHash,
       expiresAt,
+      purpose: 'PASSWORD_RESET',
+      attempts: 0,
+      resendCount: (user.otp?.resendCount ?? 0) + 1,
+      lastSentAt: new Date(),
     };
     await user.save();
-
-    logger.info(`[AuthService] Password reset OTP for user ${user._id} (${user.email || user.phone}): ${otpCode}`);
 
     return {
       userId: user._id.toString(),
@@ -277,12 +354,31 @@ export class AuthService {
       throw ApiError.notFound(MESSAGES.AUTH.USER_NOT_FOUND || 'User not found.');
     }
 
-    if (!user.otp || !user.otp.code || user.otp.code !== otp.trim()) {
+    if (!user.otp || !user.otp.code) {
       throw ApiError.badRequest(MESSAGES.AUTH.INVALID_OTP || 'Invalid or incorrect OTP.');
+    }
+
+    if (user.otp.purpose && user.otp.purpose !== 'PASSWORD_RESET') {
+      throw ApiError.badRequest(
+        MESSAGES.AUTH.OTP_PURPOSE_INVALID || 'This verification code cannot be used for this action.'
+      );
     }
 
     if (user.otp.expiresAt && isOTPExpired(user.otp.expiresAt)) {
       throw ApiError.badRequest(MESSAGES.AUTH.OTP_EXPIRED || 'OTP has expired. Please request a new one.');
+    }
+
+    if ((user.otp.attempts ?? 0) >= env.OTP_MAX_ATTEMPTS) {
+      throw ApiError.tooManyRequests(
+        MESSAGES.AUTH.OTP_ATTEMPTS_EXCEEDED || 'Too many incorrect OTP attempts. Please request a new code.'
+      );
+    }
+
+    const isOtpValid = await verifyOTPHash(otp.trim(), user.otp.code);
+    if (!isOtpValid) {
+      user.otp.attempts = (user.otp.attempts ?? 0) + 1;
+      await user.save();
+      throw ApiError.badRequest(MESSAGES.AUTH.INVALID_OTP || 'Invalid or incorrect OTP.');
     }
 
     // Set new password (pre-save hook hashes it automatically)
@@ -346,15 +442,18 @@ export class AuthService {
       throw ApiError.unauthorized(MESSAGES.AUTH.REFRESH_TOKEN_INVALID || 'Invalid or expired refresh token.');
     }
 
-    const storedToken = await RefreshToken.findOne({ token, isRevoked: false });
+    const tokenHash = hashRefreshToken(token);
+    const storedToken = await RefreshToken.findOneAndUpdate(
+      {
+        token: tokenHash,
+        isRevoked: false,
+        expiresAt: { $gt: new Date() },
+      },
+      { $set: { isRevoked: true } },
+      { new: true }
+    );
     if (!storedToken) {
       throw ApiError.unauthorized(MESSAGES.AUTH.REFRESH_TOKEN_INVALID || 'Refresh token revoked or expired.');
-    }
-
-    if (new Date() > storedToken.expiresAt) {
-      storedToken.isRevoked = true;
-      await storedToken.save();
-      throw ApiError.unauthorized('Refresh token has expired.');
     }
 
     const user = await User.findById(storedToken.user);
@@ -366,10 +465,6 @@ export class AuthService {
       throw ApiError.forbidden(MESSAGES.AUTH.ACCOUNT_BLOCKED || 'Your account is suspended.');
     }
 
-    // Revoke old token to achieve secure token rotation
-    storedToken.isRevoked = true;
-    await storedToken.save();
-
     return this.generateTokens(user);
   }
 
@@ -379,7 +474,7 @@ export class AuthService {
   public async logout(userId: string, refreshTokenString?: string): Promise<{ message: string }> {
     if (refreshTokenString) {
       await RefreshToken.updateOne(
-        { token: refreshTokenString, user: userId },
+        { token: hashRefreshToken(refreshTokenString), user: userId },
         { isRevoked: true }
       );
     } else {

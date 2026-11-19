@@ -11,6 +11,7 @@ abstract class AuthRemoteDataSource {
   Future<AuthResponse> register(String name, String email, String phone, String password);
   Future<AuthResponse> login(String emailOrPhone, String password);
   Future<Map<String, dynamic>> verifyOTP(String userId, String otp);
+  Future<Map<String, dynamic>> resendOTP({String? userId, String? emailOrPhone});
   Future<Map<String, dynamic>> forgotPassword(String emailOrPhone);
   Future<Map<String, dynamic>> resetPassword(String userId, String otp, String newPassword);
   Future<AuthResponse> refreshToken(String token);
@@ -92,6 +93,26 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         return response.data as Map<String, dynamic>;
       }
       return {'success': true, 'message': 'OTP verified successfully'};
+    } catch (e) {
+      _handleError(e);
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> resendOTP({
+    String? userId,
+    String? emailOrPhone,
+  }) async {
+    try {
+      final response = await _dio.post(
+        ApiEndpoints.resendOtp,
+        data: _identityPayload(userId: userId, emailOrPhone: emailOrPhone),
+      );
+
+      if (response.data is Map<String, dynamic>) {
+        return response.data as Map<String, dynamic>;
+      }
+      return {'success': true, 'message': 'A new verification code has been sent.'};
     } catch (e) {
       _handleError(e);
     }
@@ -229,7 +250,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         ),
       });
 
-      final response = await _dio.post(
+      final response = await _dio.put(
         ApiEndpoints.avatar,
         data: formData,
         options: Options(contentType: 'multipart/form-data'),
@@ -237,17 +258,40 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
       final data = response.data;
       if (data is Map<String, dynamic>) {
+        final responseData = data['data'];
+        final userData = responseData is Map ? responseData['user'] : null;
         final url = data['avatarUrl'] ??
             data['url'] ??
             data['avatar'] ??
-            data['data']?['avatarUrl'] ??
-            data['data']?['url'];
-        if (url != null) return url.toString();
+            (responseData is Map ? responseData['avatarUrl'] : null) ??
+            (responseData is Map ? responseData['url'] : null) ??
+            (responseData is Map ? responseData['avatar'] : null) ??
+            (userData is Map ? userData['avatar'] : null);
+        if (url != null && url.toString().isNotEmpty) return url.toString();
       }
       throw const ServerException(message: 'Avatar uploaded but URL was not returned.');
     } catch (e) {
       _handleError(e);
     }
+  }
+
+  Map<String, dynamic> _identityPayload({
+    String? userId,
+    String? emailOrPhone,
+  }) {
+    if (userId != null && userId.trim().isNotEmpty) {
+      return {'userId': userId.trim()};
+    }
+
+    final identifier = emailOrPhone?.trim() ?? '';
+    if (identifier.isEmpty) {
+      throw const ValidationException(
+        message: 'A user ID, email, or phone number is required.',
+        errors: {'general': 'A user ID, email, or phone number is required.'},
+      );
+    }
+
+    return {identifier.contains('@') ? 'email' : 'phone': identifier};
   }
 
   /// Maps Dio errors or generic errors to domain-specific AppExceptions

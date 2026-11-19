@@ -10,9 +10,9 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/error_widget.dart';
 import '../../../../core/widgets/loading_widget.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
-import '../../teams/domain/entities/team.dart';
-import '../../teams/presentation/widgets/team_card.dart';
-import '../domain/entities/dashboard_data.dart';
+import '../../../teams/domain/entities/team.dart';
+import '../../../teams/presentation/widgets/team_card.dart';
+import '../../domain/entities/dashboard_data.dart';
 import '../providers/dashboard_provider.dart';
 
 /// Primary Landing Hub showcasing live cricket action, quick tournaments overview,

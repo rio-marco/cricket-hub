@@ -21,11 +21,12 @@ app.use(
 );
 
 // CORS configuration
-const corsOrigin = env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN.split(',').map((o) => o.trim());
+const allowAllOrigins = env.CORS_ORIGIN === '*';
+const corsOrigin = allowAllOrigins ? true : env.CORS_ORIGIN.split(',').map((o) => o.trim());
 app.use(
   cors({
     origin: corsOrigin,
-    credentials: true,
+    credentials: !allowAllOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   })

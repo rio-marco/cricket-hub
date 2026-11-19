@@ -51,7 +51,7 @@ class _TournamentDetailScreenState extends ConsumerState<TournamentDetailScreen>
 
     showModalBottomSheet(
       context: context,
-      isScrollable: true,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         final isDark = Theme.of(ctx).brightness == Brightness.dark;

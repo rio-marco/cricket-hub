@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../constants/app_constants.dart';
@@ -65,7 +66,7 @@ class AppTheme {
       ),
 
       // Card Theme
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.cardLight,
         elevation: 1.5,
         shadowColor: Colors.black.withOpacity(0.06),
@@ -217,7 +218,7 @@ class AppTheme {
       ),
 
       // Dialog Theme
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: AppColors.surfaceLight,
         elevation: 6,
         shape: RoundedRectangleBorder(
@@ -260,7 +261,7 @@ class AppTheme {
       ),
 
       // Tab Bar Theme
-      tabBarTheme: TabBarTheme(
+      tabBarTheme: TabBarThemeData(
         indicatorColor: AppColors.primary,
         indicatorSize: TabBarIndicatorSize.tab,
         dividerColor: AppColors.dividerLight,
@@ -275,7 +276,7 @@ class AppTheme {
       ),
 
       // Smooth Transitions
-      pageTransitionsTheme: const PageTransitionsTheme(
+      pageTransitionsTheme: PageTransitionsTheme(
         builders: {
           TargetPlatform.android: ZoomPageTransitionsBuilder(),
           TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
@@ -344,7 +345,7 @@ class AppTheme {
       ),
 
       // Card Theme
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.cardDark,
         elevation: 2,
         shadowColor: Colors.black.withOpacity(0.35),
@@ -496,7 +497,7 @@ class AppTheme {
       ),
 
       // Dialog Theme
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: AppColors.surfaceDark,
         elevation: 6,
         shape: RoundedRectangleBorder(
@@ -539,7 +540,7 @@ class AppTheme {
       ),
 
       // Tab Bar Theme
-      tabBarTheme: TabBarTheme(
+      tabBarTheme: TabBarThemeData(
         indicatorColor: AppColors.primary,
         indicatorSize: TabBarIndicatorSize.tab,
         dividerColor: AppColors.dividerDark,
@@ -554,7 +555,7 @@ class AppTheme {
       ),
 
       // Smooth Transitions
-      pageTransitionsTheme: const PageTransitionsTheme(
+      pageTransitionsTheme: PageTransitionsTheme(
         builders: {
           TargetPlatform.android: ZoomPageTransitionsBuilder(),
           TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),

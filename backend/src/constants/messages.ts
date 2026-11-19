@@ -24,6 +24,12 @@ export const AUTH_MESSAGES = {
   INVALID_TOKEN: 'Invalid authentication token.',
   REFRESH_TOKEN_REQUIRED: 'Refresh token is required.',
   REFRESH_TOKEN_INVALID: 'Refresh token is invalid or has been revoked.',
+  VERIFICATION_REQUIRED: 'Please verify your account before accessing this resource.',
+  ACCOUNT_ALREADY_VERIFIED: 'This account is already verified.',
+  OTP_ATTEMPTS_EXCEEDED: 'Too many incorrect OTP attempts. Please request a new code.',
+  OTP_RESEND_COOLDOWN: 'Please wait before requesting another verification code.',
+  OTP_RESEND_LIMIT: 'The maximum number of OTP resends has been reached.',
+  OTP_PURPOSE_INVALID: 'This verification code cannot be used for this action.',
 };
 
 export const PLAYER_MESSAGES = {

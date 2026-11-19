@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_endpoints.dart';
-import '../../teams/data/models/team_model.dart';
-import '../../teams/domain/entities/team.dart';
-import '../domain/entities/dashboard_data.dart';
+import '../../../teams/data/models/team_model.dart';
+import '../../../teams/domain/entities/team.dart';
+import '../../domain/entities/dashboard_data.dart';
 
 /// Repository responsible for aggregating home dashboard stats, fixtures, and highlights.
 class DashboardRepository {

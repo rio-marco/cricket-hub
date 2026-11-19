@@ -25,14 +25,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "14.7.0"
-  analyzer_buffer:
-    dependency: transitive
-    description:
-      name: analyzer_buffer
-      sha256: f890a2e708e38fbf4238ad2f9fd3d506538acdddb0cd8eb2c3e8c7bd17784b57
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.3.4"
   args:
     dependency: transitive
     description:
@@ -359,10 +351,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_riverpod
-      sha256: "2ae1a93a868ae5f2d5358f521a4bfae0da7a3bfe77a60515ab5c28953b50557f"
+      sha256: "9532ee6db4a943a1ed8383072a2e3eeda041db5657cdf6d2acecf3c21ecbe7e1"
       url: "https://pub.dev"
     source: hosted
-    version: "3.5.0"
+    version: "2.6.1"
   flutter_secure_storage:
     dependency: "direct main"
     description:
@@ -421,14 +413,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  freezed_annotation:
-    dependency: transitive
-    description:
-      name: freezed_annotation
-      sha256: "7294967ff0a6d98638e7acb774aac3af2550777accd8149c90af5b014e6d44d8"
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.1.0"
   glob:
     dependency: transitive
     description:
@@ -445,6 +429,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "18.1.4"
+  google_fonts:
+    dependency: "direct main"
+    description:
+      name: google_fonts
+      sha256: ba03d03bcaa2f6cb7bd920e3b5027181db75ab524f8891c8bc3aa603885b8055
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.3.3"
   graphs:
     dependency: transitive
     description:
@@ -629,14 +621,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.1.0"
-  listen:
-    dependency: transitive
-    description:
-      name: listen
-      sha256: "47501a08016a43fcad79252439d723f50f14f88fa7bfd8a177e0a417e5c9e1f2"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.1"
   logger:
     dependency: "direct main"
     description:
@@ -814,37 +798,13 @@ packages:
     source: hosted
     version: "0.6.0"
   riverpod:
-    dependency: transitive
-    description:
-      name: riverpod
-      sha256: "24cbce92e87088cae0dd06caac3876c0b3abfd084901e7a93a3254d6daf4937d"
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.5.0"
-  riverpod_analyzer_utils:
-    dependency: transitive
-    description:
-      name: riverpod_analyzer_utils
-      sha256: a9ac757dd927b8b52ee4d3c5f8b7ecba523e140a8df916a88d5d54fef5bff72f
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.0"
-  riverpod_annotation:
     dependency: "direct main"
     description:
-      name: riverpod_annotation
-      sha256: "61baad25ae2164778032a4dd1fabf97372eb314bcd81fd2645ed9ec7fadb0208"
+      name: riverpod
+      sha256: "59062512288d3056b2321804332a13ffdd1bf16df70dcc8e506e411280a72959"
       url: "https://pub.dev"
     source: hosted
-    version: "4.0.8"
-  riverpod_generator:
-    dependency: "direct dev"
-    description:
-      name: riverpod_generator
-      sha256: "3d5dc44c50452633ee700d8c31d680d80306dd19733c653b4117b9fc3e1d7399"
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.0.10"
+    version: "2.6.1"
   shelf:
     dependency: transitive
     description:
@@ -882,14 +842,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.1"
-  source_gen:
-    dependency: transitive
-    description:
-      name: source_gen
-      sha256: "833ea7d15b5be79949d3d6c077da0267a0bd93c16897b36a771395a91e63086e"
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.3.1"
   source_span:
     dependency: transitive
     description:
@@ -962,14 +914,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
-  uuid:
-    dependency: transitive
-    description:
-      name: uuid
-      sha256: "9b129329f58692f6e6578329498a8fe9fbe98f090beb764ffbb8ee2eadd01dcd"
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.6.0"
   vector_math:
     dependency: transitive
     description:

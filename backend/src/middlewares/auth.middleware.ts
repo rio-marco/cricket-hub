@@ -58,9 +58,14 @@ export const protect = asyncHandler(
       throw ApiError.unauthorized(MESSAGES.AUTH.USER_NOT_FOUND || 'User belonging to this token no longer exists.');
     }
 
-    // Check if account is suspended or blocked
     if (user.isBlocked) {
       throw ApiError.forbidden(MESSAGES.AUTH.ACCOUNT_BLOCKED || 'Your account has been suspended. Please contact support.');
+    }
+
+    if (!user.isVerified) {
+      throw ApiError.forbidden(
+        MESSAGES.AUTH.VERIFICATION_REQUIRED || 'Please verify your account before accessing this resource.'
+      );
     }
 
     // Attach user to Express Request

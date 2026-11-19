@@ -45,8 +45,8 @@ class ApiClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          // Attach bearer token if available and not already set
-          if (!options.headers.containsKey(HttpHeaders.authorizationHeader)) {
+          if (!_isPublicAuthPath(options.path) &&
+              !options.headers.containsKey(HttpHeaders.authorizationHeader)) {
             final token = await _storage.getToken();
             if (token != null && token.isNotEmpty) {
               options.headers[HttpHeaders.authorizationHeader] = 'Bearer $token';
@@ -61,7 +61,8 @@ class ApiClient {
 
             // Avoid infinite refresh loops if refresh endpoint itself failed with 401
             final isRefreshRequest = requestOptions.path.contains(ApiEndpoints.refreshToken) ||
-                requestOptions.extra['isRetry'] == true;
+                requestOptions.extra['isRetry'] == true ||
+                _isPublicAuthPath(requestOptions.path);
 
             if (!isRefreshRequest) {
               final refreshed = await _attemptTokenRefresh();
@@ -120,6 +121,15 @@ class ApiClient {
     }
   }
 
+  static bool _isPublicAuthPath(String path) {
+    return path.contains(ApiEndpoints.register) ||
+        path.contains(ApiEndpoints.login) ||
+        path.contains(ApiEndpoints.verifyOtp) ||
+        path.contains(ApiEndpoints.resendOtp) ||
+        path.contains(ApiEndpoints.forgotPassword) ||
+        path.contains(ApiEndpoints.resetPassword);
+  }
+
   /// Attempts to exchange refresh token for a fresh JWT access token.
   Future<bool> _attemptTokenRefresh() async {
     final currentRefreshToken = await _storage.getRefreshToken();
@@ -142,13 +152,31 @@ class ApiClient {
       );
 
       if (response.statusCode == 200 && response.data != null) {
-        final data = response.data is Map ? response.data : {};
-        final newAccessToken = data['token'] ?? data['accessToken'] ?? data['data']?['token'];
-        final newRefreshToken = data['refreshToken'] ?? data['data']?['refreshToken'];
+        final outerData = response.data is Map ? Map<String, dynamic>.from(response.data) : <String, dynamic>{};
+        final data = outerData['data'] is Map
+            ? Map<String, dynamic>.from(outerData['data'] as Map)
+            : outerData;
+        final tokens = data['tokens'] is Map
+            ? Map<String, dynamic>.from(data['tokens'] as Map)
+            : data;
 
-        if (newAccessToken != null) {
+        final newAccessToken = tokens['accessToken'] ??
+            tokens['token'] ??
+            tokens['access_token'] ??
+            data['accessToken'] ??
+            data['token'] ??
+            outerData['accessToken'] ??
+            outerData['token'];
+        final newRefreshToken = tokens['refreshToken'] ??
+            tokens['refresh_token'] ??
+            data['refreshToken'] ??
+            data['refresh_token'] ??
+            outerData['refreshToken'] ??
+            outerData['refresh_token'];
+
+        if (newAccessToken != null && newAccessToken.toString().isNotEmpty) {
           await _storage.saveToken(newAccessToken.toString());
-          if (newRefreshToken != null) {
+          if (newRefreshToken != null && newRefreshToken.toString().isNotEmpty) {
             await _storage.saveRefreshToken(newRefreshToken.toString());
           }
           return true;

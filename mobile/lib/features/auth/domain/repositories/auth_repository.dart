@@ -23,6 +23,11 @@ abstract class AuthRepository {
     required String otp,
   });
 
+  Future<Map<String, dynamic>> resendOTP({
+    String? userId,
+    String? emailOrPhone,
+  });
+
   /// Initiates password reset by requesting OTP to registered email or phone.
   Future<Map<String, dynamic>> forgotPassword({
     required String emailOrPhone,

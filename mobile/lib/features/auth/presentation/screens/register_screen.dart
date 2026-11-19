@@ -72,7 +72,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     final fullPhone = '$_selectedCountryCode${_phoneController.text.trim()}';
 
-    final success = await ref.read(authStateProvider.notifier).register(
+    final userId = await ref.read(authStateProvider.notifier).register(
       name: _nameController.text.trim(),
       email: _emailController.text.trim(),
       phone: fullPhone,
@@ -81,11 +81,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
     if (!mounted) return;
 
-    if (success) {
-      // Navigate to OTP verification screen passing context
+    if (userId != null) {
       context.push(
         AppRoutes.verifyOtp,
         extra: {
+          'userId': userId,
           'email': _emailController.text.trim(),
           'phone': fullPhone,
         },

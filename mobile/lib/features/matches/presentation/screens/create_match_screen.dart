@@ -6,7 +6,7 @@ import 'package:mobile/core/theme/app_colors.dart';
 import 'package:mobile/core/theme/app_text_styles.dart';
 import 'package:mobile/core/widgets/app_button.dart';
 import 'package:mobile/core/widgets/app_text_field.dart';
-import '../../tournaments/presentation/providers/tournament_provider.dart';
+import '../../../tournaments/presentation/providers/tournament_provider.dart';
 import '../providers/match_provider.dart';
 
 /// Screen form to create a new match fixture with opposing teams, overs, ball type, and schedule.
@@ -212,8 +212,8 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
 
               AppTextField(
                 controller: _teamAController,
-                label: 'Team A Name *',
-                hint: 'e.g. Mumbai Warriors',
+                labelText: 'Team A Name *',
+                hintText: 'e.g. Mumbai Warriors',
                 prefixIcon: const Icon(Icons.shield_outlined, color: AppColors.primary),
                 validator: (v) =>
                     (v == null || v.trim().length < 2) ? 'Please enter Team A name' : null,
@@ -242,8 +242,8 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
 
               AppTextField(
                 controller: _teamBController,
-                label: 'Team B Name *',
-                hint: 'e.g. Marine Drive Strikers',
+                labelText: 'Team B Name *',
+                hintText: 'e.g. Marine Drive Strikers',
                 prefixIcon: const Icon(Icons.shield_rounded, color: AppColors.secondaryLight),
                 validator: (v) =>
                     (v == null || v.trim().length < 2) ? 'Please enter Team B name' : null,
@@ -269,8 +269,8 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
                 const SizedBox(height: 14),
                 AppTextField(
                   controller: _oversController,
-                  label: 'Overs Per Innings *',
-                  hint: 'e.g. 15',
+                  labelText: 'Overs Per Innings *',
+                  hintText: 'e.g. 15',
                   keyboardType: TextInputType.number,
                   prefixIcon: const Icon(Icons.timer_outlined),
                   validator: (v) {
@@ -315,8 +315,8 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
                     flex: 3,
                     child: AppTextField(
                       controller: _venueController,
-                      label: 'Ground Venue *',
-                      hint: 'e.g. Wankhede Stadium',
+                      labelText: 'Ground Venue *',
+                      hintText: 'e.g. Wankhede Stadium',
                       prefixIcon: const Icon(Icons.stadium_outlined),
                       validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter venue' : null,
                     ),
@@ -326,8 +326,8 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
                     flex: 2,
                     child: AppTextField(
                       controller: _cityController,
-                      label: 'City',
-                      hint: 'e.g. Mumbai',
+                      labelText: 'City',
+                      hintText: 'e.g. Mumbai',
                       prefixIcon: const Icon(Icons.location_city_outlined),
                     ),
                   ),

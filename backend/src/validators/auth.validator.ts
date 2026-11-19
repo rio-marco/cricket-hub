@@ -34,11 +34,11 @@ export const registerSchema = Joi.object({
     'any.required': 'Password is required',
   }),
   role: Joi.string()
-    .valid(...Object.values(UserRole))
+    .valid(UserRole.NORMAL_USER)
     .optional()
     .default(UserRole.NORMAL_USER)
     .messages({
-      'any.only': `Role must be one of: ${Object.values(UserRole).join(', ')}`,
+      'any.only': 'Public registration can only create NORMAL_USER accounts.',
     }),
 })
   .or('email', 'phone')
@@ -80,6 +80,16 @@ export const verifyOTPSchema = Joi.object({
     'any.required': 'OTP is required',
   }),
 });
+
+export const resendOTPSchema = Joi.object({
+  userId: Joi.string().trim().optional(),
+  email: Joi.string().trim().email().lowercase().optional(),
+  phone: Joi.string().trim().pattern(phonePattern).optional(),
+})
+  .or('userId', 'email', 'phone')
+  .messages({
+    'object.missing': 'Either userId, email, or phone number is required to resend an OTP',
+  });
 
 /**
  * Forgot Password Schema
@@ -159,6 +169,7 @@ export default {
   registerSchema,
   loginSchema,
   verifyOTPSchema,
+  resendOTPSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
   changePasswordSchema,

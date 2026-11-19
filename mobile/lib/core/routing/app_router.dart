@@ -176,7 +176,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
           return ResetPasswordScreen(
-            userId: extra?['userId'] ?? extra?['identifier'],
+            userId: extra?['userId'],
             initialOtp: extra?['otp'],
           );
         },
