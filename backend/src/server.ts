@@ -1,34 +1,14 @@
 import http from 'http';
-import { Server as SocketIOServer } from 'socket.io';
 import { app } from './app';
 import { env } from './config/env';
+import { configureSocketIO } from './config/socket';
 import { connectDatabase, disconnectDatabase } from './config/database';
 import { logger } from './utils/logger';
 
 // Create HTTP server instance
 const server = http.createServer(app);
 
-// Initialize Socket.IO instance for real-time live scoring and auctions
-const corsOrigin = env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN.split(',').map((o) => o.trim());
-
-const io = new SocketIOServer(server, {
-  cors: {
-    origin: corsOrigin,
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
-  pingTimeout: 60000,
-  pingInterval: 25000,
-});
-
-// Setup default Socket.IO connection handling
-io.on('connection', (socket) => {
-  logger.info(`[Socket.IO] Client connected: ${socket.id}`);
-
-  socket.on('disconnect', (reason) => {
-    logger.info(`[Socket.IO] Client disconnected: ${socket.id} (Reason: ${reason})`);
-  });
-});
+const io = configureSocketIO(server);
 
 /**
  * Start the HTTP server and database connections

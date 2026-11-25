@@ -7,6 +7,7 @@ import 'package:mobile/core/widgets/empty_state_widget.dart';
 import 'package:mobile/core/widgets/loading_widget.dart';
 
 import '../../domain/entities/scoring.dart';
+import '../providers/realtime_provider.dart';
 import '../providers/scoring_provider.dart';
 import '../widgets/commentary_item.dart';
 
@@ -17,6 +18,7 @@ class FullScorecardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(matchRoomProvider(matchId));
     final state = ref.watch(scoringControllerProvider(matchId));
     final notifier = ref.read(scoringControllerProvider(matchId).notifier);
     final match = state.snapshot.match;

@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/core/api/api_client.dart';
 import 'package:mobile/core/errors/failures.dart';
 
 import '../../data/datasources/scoring_remote_datasource.dart';
+import '../../data/models/scoring_model.dart';
+import '../../data/realtime/match_realtime_event.dart';
 import '../../data/repositories/scoring_repository_impl.dart';
 import '../../domain/entities/scoring.dart';
 
@@ -55,6 +59,7 @@ class ScoringUiState {
 class ScoringNotifier extends StateNotifier<ScoringUiState> {
   final ScoringRepository _repository;
   int _requestCounter = 0;
+  final Set<String> _seenEventIds = <String>{};
 
   ScoringNotifier(this._repository, String matchId)
       : super(ScoringUiState(matchId: matchId)) {
@@ -73,6 +78,62 @@ class ScoringNotifier extends StateNotifier<ScoringUiState> {
     } catch (error) {
       state = state.copyWith(isLoading: false, errorMessage: error.toString());
     }
+  }
+
+  void applyState(
+    Map<String, dynamic> incomingState, {
+    String message = 'Live score updated.',
+  }) {
+    final incomingVersion = _versionOf(incomingState);
+    final currentVersion = _versionOf(activeInnings);
+    if (incomingVersion != null &&
+        currentVersion != null &&
+        incomingVersion < currentVersion) {
+      return;
+    }
+    state = state.copyWith(
+      snapshot: ScoringSnapshotModel.fromJson({'data': incomingState}),
+      isSaving: false,
+      successMessage: message,
+      clearErrorMessage: true,
+    );
+  }
+
+  void applyRealtimeEvent(MatchRealtimeEvent event) {
+    if (event.matchId != null && event.matchId != state.matchId) return;
+
+    if (event.name == 'match:error') {
+      final message = event.errorMessage;
+      if (message != null) {
+        state = state.copyWith(isSaving: false, errorMessage: message);
+      }
+      return;
+    }
+
+    final eventId = event.eventId;
+    if (eventId != null && eventId.isNotEmpty) {
+      if (_seenEventIds.contains(eventId)) return;
+      if (_seenEventIds.length >= 200) {
+        _seenEventIds.remove(_seenEventIds.first);
+      }
+      _seenEventIds.add(eventId);
+    }
+
+    final incoming = event.state;
+    if (incoming != null) {
+      applyState(incoming);
+      return;
+    }
+    if (event.name == 'connection:status') return;
+    unawaited(load());
+  }
+
+  int? _versionOf(dynamic value) {
+    final map = normalizeMapOrNull(value);
+    final innings = normalizeMapOrNull(map?['activeInnings'] ?? map);
+    final version = innings?['stateVersion'];
+    if (version is num) return version.toInt();
+    return null;
   }
 
   Future<bool> startInnings({
@@ -219,11 +280,19 @@ class ScoringNotifier extends StateNotifier<ScoringUiState> {
     state = state.copyWith(isSaving: true, clearErrorMessage: true);
     try {
       final snapshot = await action();
-      state = state.copyWith(
-        snapshot: snapshot,
-        isSaving: false,
-        successMessage: successMessage,
-      );
+      final incomingVersion = _versionOf(snapshot.activeInnings);
+      final currentVersion = _versionOf(activeInnings);
+      if (incomingVersion == null ||
+          currentVersion == null ||
+          incomingVersion >= currentVersion) {
+        state = state.copyWith(
+          snapshot: snapshot,
+          isSaving: false,
+          successMessage: successMessage,
+        );
+      } else {
+        state = state.copyWith(isSaving: false, successMessage: successMessage);
+      }
       return true;
     } on Failure catch (failure) {
       final message = failure is ValidationFailure

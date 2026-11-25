@@ -9,6 +9,7 @@ import 'package:mobile/core/widgets/error_widget.dart';
 import 'package:mobile/core/widgets/loading_widget.dart';
 
 import '../../domain/entities/scoring.dart';
+import '../providers/realtime_provider.dart';
 import '../providers/scoring_provider.dart';
 import '../widgets/commentary_item.dart';
 
@@ -30,6 +31,7 @@ class _LiveScoringScreenState extends ConsumerState<LiveScoringScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(matchRoomProvider(widget.matchId));
     final state = ref.watch(scoringControllerProvider(widget.matchId));
     final notifier = ref.read(scoringControllerProvider(widget.matchId).notifier);
     final active = state.activeInnings;

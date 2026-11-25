@@ -5,6 +5,7 @@ import Tournament from '../models/Tournament';
 import Team from '../models/Team';
 import User from '../models/User';
 import Player from '../models/Player';
+import TeamMember from '../models/TeamMember';
 import TournamentTeam from '../models/TournamentTeam';
 import {
   MatchStatus,
@@ -13,6 +14,7 @@ import {
   InningsStatus,
   TournamentTeamStatus,
   TournamentStatus,
+  TeamMemberStatus,
 } from '../constants/enums';
 import { UserRole } from '../constants/roles';
 import { MESSAGES } from '../constants/messages';
@@ -70,6 +72,32 @@ export class MatchService {
     }
 
     return false;
+  }
+
+  public async getMatchAccess(match: any, userId: string): Promise<{
+    canView: boolean;
+    canScore: boolean;
+    canManage: boolean;
+    isTeamMember: boolean;
+  }> {
+    const canManage = await this.canManageMatch(match, userId);
+    const player = await Player.findOne({ user: userId }).select('_id');
+    const isTeamMember = player
+      ? Boolean(
+          await TeamMember.exists({
+            team: { $in: [match.teamA, match.teamB] },
+            player: player._id,
+            status: TeamMemberStatus.ACTIVE,
+          })
+        )
+      : false;
+
+    return {
+      canView: true,
+      canScore: canManage,
+      canManage,
+      isTeamMember,
+    };
   }
 
   /**

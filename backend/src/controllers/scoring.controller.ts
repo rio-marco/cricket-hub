@@ -3,6 +3,21 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { ApiResponse } from '../utils/apiResponse';
 import { ApiError } from '../utils/apiError';
 import scoringService from '../services/scoring.service';
+import { publishScoringEvent } from '../sockets/publisher';
+import { ScoringCommit } from '../sockets/types';
+
+const respondWithState = (
+  res: Response,
+  status: number,
+  message: string,
+  result: any
+): void => {
+  const { commit, ...state } = result || {};
+  if ((commit as ScoringCommit | undefined)?.committed) {
+    publishScoringEvent(commit as ScoringCommit, state);
+  }
+  ApiResponse.success(res, status, message, state);
+};
 
 const currentUserId = (req: Request): string => {
   const userId = req.user?._id?.toString() || req.user?.id;
@@ -57,7 +72,7 @@ export const startInnings = asyncHandler(async (req: Request, res: Response): Pr
     currentUserId(req),
     scoringInput(req) as never
   );
-  ApiResponse.success(res, 200, 'Innings started successfully.', state);
+  respondWithState(res, 200, 'Innings started successfully.', state);
 });
 
 export const recordBall = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -66,7 +81,7 @@ export const recordBall = asyncHandler(async (req: Request, res: Response): Prom
     currentUserId(req),
     scoringInput(req) as never
   );
-  ApiResponse.success(res, 201, 'Delivery recorded successfully.', result);
+  respondWithState(res, 201, 'Delivery recorded successfully.', result);
 });
 
 export const undoBall = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -75,7 +90,7 @@ export const undoBall = asyncHandler(async (req: Request, res: Response): Promis
     currentUserId(req),
     scoringInput(req) as never
   );
-  ApiResponse.success(res, 200, 'Delivery undone successfully.', state);
+  respondWithState(res, 200, 'Delivery undone successfully.', state);
 });
 
 export const correctBall = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -85,7 +100,7 @@ export const correctBall = asyncHandler(async (req: Request, res: Response): Pro
     currentUserId(req),
     scoringInput(req) as never
   );
-  ApiResponse.success(res, 200, 'Delivery corrected successfully.', state);
+  respondWithState(res, 200, 'Delivery corrected successfully.', state);
 });
 
 export const endInnings = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -94,7 +109,7 @@ export const endInnings = asyncHandler(async (req: Request, res: Response): Prom
     currentUserId(req),
     scoringInput(req) as never
   );
-  ApiResponse.success(res, 200, 'Innings completed successfully.', state);
+  respondWithState(res, 200, 'Innings completed successfully.', state);
 });
 
 export const completeMatch = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -103,7 +118,7 @@ export const completeMatch = asyncHandler(async (req: Request, res: Response): P
     currentUserId(req),
     scoringInput(req) as never
   );
-  ApiResponse.success(res, 200, 'Match result recorded successfully.', state);
+  respondWithState(res, 200, 'Match result recorded successfully.', state);
 });
 
 export default {

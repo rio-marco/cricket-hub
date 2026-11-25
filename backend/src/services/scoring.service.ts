@@ -12,6 +12,7 @@ import {
   ResultType,
 } from '../constants/enums';
 import { ApiError } from '../utils/apiError';
+import { ScoringCommit } from '../sockets/types';
 import matchService from './match.service';
 import {
   ApplyDeliveryResult,
@@ -621,8 +622,9 @@ export class ScoringService {
     const duplicate = await this.existingAudit(matchId, input);
     if (duplicate) return this.getState(matchId);
 
+    let commit: ScoringCommit;
     try {
-      await this.transaction(async (session) => {
+      commit = await this.transaction(async (session) => {
         const match = await this.findMatch(matchId, session);
         await this.authorize(match, userId);
         const innings = await this.findInnings(matchId, inningsNumber, session);
@@ -673,13 +675,24 @@ export class ScoringService {
           { stateVersion: innings.stateVersion, inningsNumber },
           session
         );
+
+        return {
+          committed: true,
+          matchId,
+          kind: 'START_INNINGS',
+          action: ScoringAuditAction.START_INNINGS,
+          requestKey: key,
+          stateVersion: Number(innings.stateVersion),
+          inningsNumber,
+          actorId: userId,
+        } as ScoringCommit;
       });
     } catch (error) {
       if (duplicate && isDuplicateKeyError(error)) return this.getState(matchId);
       throw error;
     }
 
-    return this.getState(matchId);
+    return { ...(await this.getState(matchId)), commit };
   }
 
   public async recordBall(
@@ -691,8 +704,9 @@ export class ScoringService {
     if (duplicate) return this.getState(matchId);
 
     let deliveryId = '';
+    let commit: ScoringCommit;
     try {
-      await this.transaction(async (session) => {
+      commit = await this.transaction(async (session) => {
         const match = await this.findMatch(matchId, session);
         await this.authorize(match, userId);
         const inningsNumber = Number(match.currentInnings) || 1;
@@ -792,6 +806,20 @@ export class ScoringService {
           { deliveryId, stateVersion: applied.state.stateVersion },
           session
         );
+
+        return {
+          committed: true,
+          matchId,
+          kind: 'BALL',
+          action: ScoringAuditAction.BALL,
+          requestKey: key,
+          stateVersion: Number(applied.state.stateVersion),
+          inningsNumber,
+          actorId: userId,
+          deliveryId,
+          overCompleted: Boolean(applied.overCompleted),
+          isWicket: Boolean(applied.isWicket),
+        } as ScoringCommit;
       });
     } catch (error) {
       if (duplicate && isDuplicateKeyError(error)) return this.getState(matchId);
@@ -799,15 +827,16 @@ export class ScoringService {
     }
 
     const state = await this.getState(matchId);
-    return { ...state, deliveryId };
+    return { ...state, deliveryId, commit };
   }
 
   public async undo(matchId: string, userId: string, input: ScoringInput): Promise<any> {
     const duplicate = await this.existingAudit(matchId, input);
     if (duplicate) return this.getState(matchId);
 
+    let commit: ScoringCommit;
     try {
-      await this.transaction(async (session) => {
+      commit = await this.transaction(async (session) => {
         const match = await this.findMatch(matchId, session);
         await this.authorize(match, userId);
         const inningsNumber = Number(match.currentInnings) || 1;
@@ -847,13 +876,25 @@ export class ScoringService {
           { undoneDeliveryId: String(last._id), stateVersion: rebuilt.stateVersion },
           session
         );
+
+        return {
+          committed: true,
+          matchId,
+          kind: 'UNDO',
+          action: ScoringAuditAction.UNDO,
+          requestKey: key,
+          stateVersion: Number(rebuilt.stateVersion),
+          inningsNumber,
+          actorId: userId,
+          undoneDeliveryId: String(last._id),
+        } as ScoringCommit;
       });
     } catch (error) {
       if (duplicate && isDuplicateKeyError(error)) return this.getState(matchId);
       throw error;
     }
 
-    return this.getState(matchId);
+    return { ...(await this.getState(matchId)), commit };
   }
 
   public async correctBall(
@@ -868,8 +909,9 @@ export class ScoringService {
     const duplicate = await this.existingAudit(matchId, input);
     if (duplicate) return this.getState(matchId);
 
+    let commit: ScoringCommit;
     try {
-      await this.transaction(async (session) => {
+      commit = await this.transaction(async (session) => {
         const match = await this.findMatch(matchId, session);
         await this.authorize(match, userId);
         const target = await Delivery.findOne({ _id: deliveryId, match: match._id }).session(session);
@@ -1002,13 +1044,27 @@ export class ScoringService {
           { correctedDeliveryId: String(corrected._id), stateVersion: rebuilt.stateVersion },
           session
         );
+
+        return {
+          committed: true,
+          matchId,
+          kind: 'CORRECT',
+          action: ScoringAuditAction.CORRECT,
+          requestKey: key,
+          stateVersion: Number(rebuilt.stateVersion),
+          inningsNumber: Number(activeInnings.inningsNumber),
+          actorId: userId,
+          correctedDeliveryId: String(corrected._id),
+          overCompleted: Boolean(applied.overCompleted),
+          isWicket: Boolean(applied.isWicket),
+        } as ScoringCommit;
       });
     } catch (error) {
       if (duplicate && isDuplicateKeyError(error)) return this.getState(matchId);
       throw error;
     }
 
-    return this.getState(matchId);
+    return { ...(await this.getState(matchId)), commit };
   }
 
   public async endInnings(
@@ -1019,8 +1075,9 @@ export class ScoringService {
     const duplicate = await this.existingAudit(matchId, input);
     if (duplicate) return this.getState(matchId);
 
+    let commit: ScoringCommit;
     try {
-      await this.transaction(async (session) => {
+      commit = await this.transaction(async (session) => {
         const match = await this.findMatch(matchId, session);
         await this.authorize(match, userId);
         const inningsNumber = Number(input.inningsNumber) || Number(match.currentInnings) || 1;
@@ -1048,13 +1105,24 @@ export class ScoringService {
           { inningsNumber, stateVersion: state.stateVersion },
           session
         );
+
+        return {
+          committed: true,
+          matchId,
+          kind: 'INNINGS_END',
+          action: ScoringAuditAction.INNINGS_END,
+          requestKey: key,
+          stateVersion: Number(state.stateVersion),
+          inningsNumber,
+          actorId: userId,
+        } as ScoringCommit;
       });
     } catch (error) {
       if (duplicate && isDuplicateKeyError(error)) return this.getState(matchId);
       throw error;
     }
 
-    return this.getState(matchId);
+    return { ...(await this.getState(matchId)), commit };
   }
 
   public async completeMatch(
@@ -1071,20 +1139,25 @@ export class ScoringService {
     const duplicate = await this.existingAudit(matchId, input);
     if (duplicate) return this.getState(matchId);
 
+    let commit: ScoringCommit;
     try {
-      await this.transaction(async (session) => {
+      commit = await this.transaction(async (session) => {
         const match = await this.findMatch(matchId, session);
         await this.authorize(match, userId);
+        const activeInnings = await this.findInnings(
+          matchId,
+          Number(match.currentInnings) || 1,
+          session
+        );
         let resultType = input.resultType as ResultType | undefined;
         let winner = input.winner;
         let margin = input.margin;
         let description = input.description;
 
         if (!resultType) {
-          const current = await this.findInnings(matchId, Number(match.currentInnings) || 1, session);
           const first = await this.findInnings(matchId, 1, session);
           const derived = deriveInningsResult(
-            this.engineState(current, match),
+            this.engineState(activeInnings, match),
             this.rules(match),
             Number(first.totalRuns) || 0
           );
@@ -1114,18 +1187,29 @@ export class ScoringService {
           userId,
           key,
           undefined,
-          Number(match.currentInnings) || 1,
+          Number(activeInnings.stateVersion) || 0,
           { ...input },
           { result: match.result },
           session
         );
+
+        return {
+          committed: true,
+          matchId,
+          kind: 'MATCH_COMPLETE',
+          action: ScoringAuditAction.INNINGS_END,
+          requestKey: key,
+          stateVersion: Number(activeInnings.stateVersion) || 0,
+          inningsNumber: Number(match.currentInnings) || 1,
+          actorId: userId,
+        } as ScoringCommit;
       });
     } catch (error) {
       if (duplicate && isDuplicateKeyError(error)) return this.getState(matchId);
       throw error;
     }
 
-    return this.getState(matchId);
+    return { ...(await this.getState(matchId)), commit };
   }
 }
 

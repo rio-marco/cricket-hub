@@ -12,6 +12,7 @@ import 'package:mobile/core/widgets/loading_widget.dart';
 import '../../domain/entities/innings.dart';
 import '../../domain/entities/match.dart';
 import '../providers/match_provider.dart';
+import '../providers/realtime_provider.dart';
 import '../widgets/commentary_item.dart';
 import '../widgets/score_header.dart';
 import '../widgets/scorecard_table.dart';
@@ -49,6 +50,7 @@ class _MatchDetailScreenState extends ConsumerState<MatchDetailScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(matchRoomProvider(widget.matchId));
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final matchAsync = ref.watch(matchDetailProvider(widget.matchId));

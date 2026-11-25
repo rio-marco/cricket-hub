@@ -222,15 +222,43 @@
 - [x] Host-run Flutter real-backend integration passed: 1 test
 - [x] `git diff --check` passed
 
+## PHASE 9: REAL-TIME MATCH SYNCHRONIZATION ✅
+### Backend
+- [x] Added authenticated Socket.IO server configuration with shared CORS resolution and JWT handshake validation
+- [x] Added match viewer/scorer rooms with fresh server-side access checks on join/sync and token-expiry disconnect handling
+- [x] Added versioned realtime event envelope with `eventId`, `matchId`, `action`, `stateVersion`, `inningsNumber`, `occurredAt`, and `actorId`
+- [x] Published `match:state`, `score:delivery`, `wicket:recorded`, `score:corrected`, `score:undone`, over/innings/match events only after scoring persistence succeeds
+- [x] Suppressed duplicate-idempotency replays and de-duplicated repeated socket event emissions
+- [x] Added `match:join`, `match:leave`, and `match:sync` handlers so clients recover authoritative state after reconnect
+- [x] Kept all scoring rules in the scoring service; socket handlers only authorize, join rooms, and emit post-commit state
+
+### Flutter
+- [x] Added a single reusable Socket.IO client with secure-token authentication, room ref-counting, automatic reconnect joins, and ack-based state recovery
+- [x] Added Riverpod realtime providers that join a match room only while an authenticated screen is mounted and leave it on dispose
+- [x] Applied authoritative versioned state snapshots to the scoring provider with stale-version rejection and event-id de-duplication
+- [x] Invalidated match detail, scorecard, commentary, and innings providers when realtime scoring events arrive
+- [x] Wired live scoring, full scorecard, and match detail screens to realtime room lifecycle updates
+- [x] Surfaced realtime error events in scoring UI state
+
+### Tests
+- [x] `npm run lint` passed
+- [x] `npm test` passed: 9 suites, 34 tests
+- [x] `npm run test:integration` passed: 8 suites, 40 tests
+- [x] `flutter analyze --no-fatal-infos --no-fatal-warnings` passed with 0 errors; 256 existing info/warning lints remain
+- [x] `flutter test` passed: 24 tests
+- [x] Host-run Flutter real-backend integration passed: 1 test
+- [x] `git diff --check` passed
+
 ## Current Status
 - Backend authentication hardened and covered by isolated unit tests
 - Flutter auth/session flow aligned with backend payloads and Riverpod 2
 - Backend query validation works under Express 5
 - Dashboard, Teams, Players, Tournaments, and Matches use real backend APIs with no mock data
 - Live scoring is implemented end-to-end with backend-authoritative rules and real Flutter screens
+- Real-time match synchronization is implemented with authenticated Socket.IO rooms, versioned post-commit events, and reconnect recovery
 - Backend: TypeScript compilation passes with 0 errors
 - Flutter: analyzer passes with 0 errors; remaining notices are lints/deprecations
-- Phases 1-8 complete
+- Phases 1-9 complete
 - MongoDB verification complete against isolated local databases; scoring tests use a single-node replica set for transactions
 
 ## Integration Verification Report
@@ -353,10 +381,38 @@
   - `mobile/lib/features/matches/presentation/screens/match_detail_screen.dart`
   - `docs/PROGRESS.md`
 
-### 7. Remaining Production Risks
+### 7. Phase 9 Files Changed
+- Added:
+  - `backend/src/config/cors.ts`
+  - `backend/src/config/socket.ts`
+  - `backend/src/sockets/auth.ts`
+  - `backend/src/sockets/matchHandlers.ts`
+  - `backend/src/sockets/publisher.ts`
+  - `backend/src/sockets/types.ts`
+  - `backend/tests/integration/socket.integration.test.ts`
+  - `mobile/lib/features/matches/data/realtime/match_realtime_client.dart`
+  - `mobile/lib/features/matches/data/realtime/match_realtime_event.dart`
+  - `mobile/lib/features/matches/presentation/providers/realtime_provider.dart`
+  - `mobile/test/match_realtime_test.dart`
+- Modified:
+  - `backend/package.json`
+  - `backend/package-lock.json`
+  - `backend/src/app.ts`
+  - `backend/src/server.ts`
+  - `backend/src/controllers/scoring.controller.ts`
+  - `backend/src/services/match.service.ts`
+  - `backend/src/services/scoring.service.ts`
+  - `mobile/lib/features/matches/presentation/providers/scoring_provider.dart`
+  - `mobile/lib/features/matches/presentation/screens/live_scoring_screen.dart`
+  - `mobile/lib/features/matches/presentation/screens/full_scorecard_screen.dart`
+  - `mobile/lib/features/matches/presentation/screens/match_detail_screen.dart`
+  - `docs/PROGRESS.md`
+
+### 8. Remaining Production Risks
 - Remove duplicate Mongoose index declarations and deprecated query options before production deployment.
 - Decide whether login should reject unverified users before issuing tokens, and whether logout should revoke or shorten access-token validity.
 - Escape all remaining user-controlled regex filters.
 - Keep production `NODE_ENV=production`, use strong distinct JWT secrets, and keep OTP exposure disabled.
 - Add device-based `integration_test` coverage when Linux desktop build tools or an Android/iOS emulator are available; the current Flutter integration test runs on the Flutter test host because this environment lacks CMake/GTK build tooling.
 - Keep replica-set MongoDB or an equivalent transactional deployment in production so scoring writes remain atomic.
+- Socket.IO rooms and published-event de-duplication are process-local; use a Redis adapter and shared de-duplication before running multiple backend instances.

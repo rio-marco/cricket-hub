@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env';
+import { resolveCorsOrigins } from './config/cors';
 import { swaggerSpec } from './config/swagger';
 import routes from './routes';
 import { apiLimiter } from './middlewares/rateLimiter.middleware';
@@ -21,8 +22,9 @@ app.use(
 );
 
 // CORS configuration
-const allowAllOrigins = env.CORS_ORIGIN === '*';
-const corsOrigin = allowAllOrigins ? true : env.CORS_ORIGIN.split(',').map((o) => o.trim());
+const corsOrigins = resolveCorsOrigins();
+const allowAllOrigins = corsOrigins === '*';
+const corsOrigin = allowAllOrigins ? true : corsOrigins;
 app.use(
   cors({
     origin: corsOrigin,
