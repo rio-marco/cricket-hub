@@ -24,6 +24,9 @@ export interface IMatchListResult {
   pagination: IPaginationMeta;
 }
 
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export class MatchService {
   /**
    * Helper to check if a user is an admin
@@ -48,7 +51,7 @@ export class MatchService {
     // Check tournament organizer
     if (match.tournament) {
       const tournament = await Tournament.findById(match.tournament);
-      if (tournament && tournament.organizer.toString() === userId) {
+      if (tournament && tournament.organizer?.toString() === userId) {
         return true;
       }
     }
@@ -59,10 +62,10 @@ export class MatchService {
       Team.findById(match.teamB),
     ]);
 
-    if (teamA && teamA.owner.toString() === userId) {
+    if (teamA && teamA.owner?.toString() === userId) {
       return true;
     }
-    if (teamB && teamB.owner.toString() === userId) {
+    if (teamB && teamB.owner?.toString() === userId) {
       return true;
     }
 
@@ -75,8 +78,10 @@ export class MatchService {
   public async createMatch(userId: string, data: any): Promise<IMatch> {
     const teamAId = data.teamA;
     const teamBId = data.teamB;
+    const teamAObjectId = new Types.ObjectId(String(teamAId));
+    const teamBObjectId = new Types.ObjectId(String(teamBId));
 
-    if (teamAId === teamBId) {
+    if (teamAObjectId.equals(teamBObjectId)) {
       throw ApiError.badRequest(MESSAGES.MATCH.INVALID_TEAMS || 'Teams for the match must be different.');
     }
 
@@ -104,8 +109,16 @@ export class MatchService {
         throw ApiError.notFound(MESSAGES.TOURNAMENT.NOT_FOUND || 'Tournament not found.');
       }
 
+      if (
+        tournamentDoc.status === TournamentStatus.DRAFT ||
+        tournamentDoc.status === TournamentStatus.COMPLETED ||
+        tournamentDoc.status === TournamentStatus.CANCELLED
+      ) {
+        throw ApiError.badRequest('Matches can only be scheduled for active tournaments.');
+      }
+
       // Verify user is tournament organizer or admin
-      const isOrganizer = tournamentDoc.organizer.toString() === userId;
+      const isOrganizer = tournamentDoc.organizer?.toString() === userId;
       const isAdminUser = await this.isAdmin(userId);
       if (!isOrganizer && !isAdminUser) {
         throw ApiError.forbidden('Only tournament organizer or admin can schedule tournament matches.');
@@ -155,8 +168,8 @@ export class MatchService {
     const match = await Match.create({
       title,
       tournament: tournamentId ? new Types.ObjectId(tournamentId) : undefined,
-      teamA: new Types.ObjectId(teamAId),
-      teamB: new Types.ObjectId(teamBId),
+      teamA: teamAObjectId,
+      teamB: teamBObjectId,
       format: data.format || tournamentDoc?.matchFormat || MatchFormat.T20,
       totalOvers,
       ballType: data.ballType || tournamentDoc?.ballType,
@@ -203,11 +216,11 @@ export class MatchService {
     }
 
     if (query.city) {
-      filter.city = new RegExp(String(query.city).trim(), 'i');
+      filter.city = new RegExp(escapeRegExp(String(query.city).trim()), 'i');
     }
 
     if (query.search) {
-      const searchRegex = new RegExp(String(query.search).trim(), 'i');
+      const searchRegex = new RegExp(escapeRegExp(String(query.search).trim()), 'i');
       if (filter.$or) {
         filter.$and = [{ $or: filter.$or }, { $or: [{ title: searchRegex }, { venue: searchRegex }] }];
         delete filter.$or;
@@ -387,23 +400,25 @@ export class MatchService {
     }
 
     if (
+      match.status === MatchStatus.TOSS ||
       match.status === MatchStatus.LIVE ||
       match.status === MatchStatus.COMPLETED ||
-      match.status === MatchStatus.ABANDONED
+      match.status === MatchStatus.ABANDONED ||
+      match.status === MatchStatus.CANCELLED
     ) {
-      throw ApiError.badRequest('Cannot record toss for a match that is already live, completed, or abandoned.');
+      throw ApiError.badRequest('Cannot record toss for a match that is already past the toss stage.');
     }
 
-    const winnerIdStr = winner.toString();
-    const isTeamA = match.teamA.toString() === winnerIdStr;
-    const isTeamB = match.teamB.toString() === winnerIdStr;
+    const winnerObjectId = new Types.ObjectId(winner);
+    const isTeamA = winnerObjectId.equals(new Types.ObjectId(match.teamA.toString()));
+    const isTeamB = winnerObjectId.equals(new Types.ObjectId(match.teamB.toString()));
 
     if (!isTeamA && !isTeamB) {
       throw ApiError.badRequest('Toss winner must be either Team A or Team B.');
     }
 
     match.toss = {
-      winner: new Types.ObjectId(winner),
+      winner: winnerObjectId,
       decision,
     };
     match.status = MatchStatus.TOSS;
@@ -552,7 +567,11 @@ export class MatchService {
       throw ApiError.badRequest('Match is already live and in progress.');
     }
 
-    if (match.status === MatchStatus.COMPLETED || match.status === MatchStatus.ABANDONED) {
+    if (
+      match.status === MatchStatus.COMPLETED ||
+      match.status === MatchStatus.ABANDONED ||
+      match.status === MatchStatus.CANCELLED
+    ) {
       throw ApiError.badRequest(`Cannot start match in ${match.status} status.`);
     }
 

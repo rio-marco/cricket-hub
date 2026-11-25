@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_constants.dart';
-import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/empty_state_widget.dart';
@@ -21,6 +20,7 @@ class PlayerListScreen extends ConsumerStatefulWidget {
 class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedRole = 'ALL';
+  bool _isLoadingMore = false;
 
   final List<Map<String, String>> _roleFilters = [
     {'label': 'All Roles', 'value': 'ALL'},
@@ -184,7 +184,20 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
           ),
         ),
       ),
-      body: _buildContent(playerListState, isDark),
+      body: _buildContent(
+        playerListState,
+        isDark,
+        hasNextPage: playerListState is PlayerListLoaded
+            ? playerListState.hasNextPage
+            : false,
+        onLoadMore: _isLoadingMore
+            ? null
+            : () async {
+                setState(() => _isLoadingMore = true);
+                await ref.read(playerListProvider.notifier).loadMore();
+                if (mounted) setState(() => _isLoadingMore = false);
+              },
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/players/create'),
         backgroundColor: AppColors.primary,
@@ -201,7 +214,12 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
     );
   }
 
-  Widget _buildContent(PlayerListState state, bool isDark) {
+  Widget _buildContent(
+    PlayerListState state,
+    bool isDark, {
+    bool hasNextPage = false,
+    Future<void> Function()? onLoadMore,
+  }) {
     if (state is PlayerListLoading) {
       return _buildShimmerLoading();
     } else if (state is PlayerListError) {
@@ -245,8 +263,21 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
             top: 14,
             bottom: 88,
           ),
-          itemCount: state.players.length,
+          itemCount: state.players.length + (hasNextPage ? 1 : 0),
           itemBuilder: (context, index) {
+            if (hasNextPage && index == state.players.length) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+
+            if (hasNextPage && index == state.players.length - 1) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                onLoadMore?.call();
+              });
+            }
+
             final player = state.players[index];
             return PlayerCard(
               player: player,

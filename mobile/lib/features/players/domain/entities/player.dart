@@ -78,10 +78,11 @@ class Player {
       avatar = json['avatar'].toString();
     }
 
-    // Extract stats if nested in 'stats'
-    final stats = json['stats'] is Map<String, dynamic>
-        ? json['stats'] as Map<String, dynamic>
-        : json;
+    final stats = _careerStats(
+      json['stats'] is Map
+          ? Map<String, dynamic>.from(json['stats'] as Map)
+          : json,
+    );
 
     return Player(
       id: json['id'] as String? ?? json['_id'] as String? ?? '',
@@ -99,24 +100,45 @@ class Player {
           : null,
       city: json['city'] as String?,
       bio: json['bio'] as String?,
-      matchesCount: stats['matches'] as int? ?? stats['matchesCount'] as int? ?? 0,
-      runs: stats['runs'] as int? ?? 0,
-      ballsFaced: stats['ballsFaced'] as int? ?? 0,
-      wickets: stats['wickets'] as int? ?? 0,
-      oversBowled: stats['oversBowled'] as int? ?? stats['overs'] as int? ?? 0,
-      runsConceded: stats['runsConceded'] as int? ?? 0,
-      battingAverage: (stats['battingAverage'] as num?)?.toDouble() ??
-          (stats['average'] as num?)?.toDouble() ??
-          0.0,
-      strikeRate: (stats['strikeRate'] as num?)?.toDouble() ?? 0.0,
-      bowlingAverage: (stats['bowlingAverage'] as num?)?.toDouble() ?? 0.0,
-      economyRate: (stats['economyRate'] as num?)?.toDouble() ??
-          (stats['economy'] as num?)?.toDouble() ??
-          0.0,
-      highestScore: stats['highestScore'] as int? ?? 0,
+      matchesCount: _asInt(stats['matches']) ?? 0,
+      runs: _asInt(stats['runs']) ?? 0,
+      ballsFaced: _asInt(stats['ballsFaced']) ?? 0,
+      wickets: _asInt(stats['wickets']) ?? 0,
+      oversBowled: _asInt(stats['oversBowled']) ?? 0,
+      runsConceded: _asInt(stats['runsConceded']) ?? 0,
+      battingAverage: _asDouble(stats['battingAverage']) ?? 0.0,
+      strikeRate: _asDouble(stats['strikeRate']) ?? 0.0,
+      bowlingAverage: _asDouble(stats['bowlingAverage']) ?? 0.0,
+      economyRate: _asDouble(stats['economyRate']) ?? 0.0,
+      highestScore: _asInt(stats['highestScore']) ?? 0,
       bestBowling: stats['bestBowling']?.toString(),
-      catches: stats['catches'] as int? ?? 0,
-      stumpings: stats['stumpings'] as int? ?? 0,
+      catches: _asInt(stats['catches']) ?? 0,
+      stumpings: _asInt(stats['stumpings']) ?? 0,
+    );
+  }
+
+  static Player applyCareerStats(
+    Player player,
+    Map<String, dynamic> stats,
+  ) {
+    final values = _careerStats(stats);
+    return player.copyWith(
+      matchesCount: _asInt(values['matches']) ?? player.matchesCount,
+      runs: _asInt(values['runs']) ?? player.runs,
+      ballsFaced: _asInt(values['ballsFaced']) ?? player.ballsFaced,
+      wickets: _asInt(values['wickets']) ?? player.wickets,
+      oversBowled: _asInt(values['oversBowled']) ?? player.oversBowled,
+      runsConceded: _asInt(values['runsConceded']) ?? player.runsConceded,
+      battingAverage:
+          _asDouble(values['battingAverage']) ?? player.battingAverage,
+      strikeRate: _asDouble(values['strikeRate']) ?? player.strikeRate,
+      bowlingAverage:
+          _asDouble(values['bowlingAverage']) ?? player.bowlingAverage,
+      economyRate: _asDouble(values['economyRate']) ?? player.economyRate,
+      highestScore: _asInt(values['highestScore']) ?? player.highestScore,
+      bestBowling: values['bestBowling']?.toString() ?? player.bestBowling,
+      catches: _asInt(values['catches']) ?? player.catches,
+      stumpings: _asInt(values['stumpings']) ?? player.stumpings,
     );
   }
 
@@ -280,4 +302,47 @@ class Player {
 
   @override
   String toString() => 'Player(id: $id, name: $name, role: $playingRole)';
+}
+
+Map<String, dynamic> _asMap(dynamic value) {
+  if (value is Map<String, dynamic>) return value;
+  if (value is Map) return Map<String, dynamic>.from(value);
+  return <String, dynamic>{};
+}
+
+int? _asInt(dynamic value) {
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value.replaceAll('*', '').trim());
+  return null;
+}
+
+double? _asDouble(dynamic value) {
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value.trim());
+  return null;
+}
+
+Map<String, dynamic> _careerStats(Map<String, dynamic> stats) {
+  final batting = _asMap(stats['batting']);
+  final bowling = _asMap(stats['bowling']);
+  final fielding = _asMap(stats['fielding']);
+
+  return <String, dynamic>{
+    'matches': stats['matches'] ?? stats['matchesCount'],
+    'runs': batting['runs'] ?? stats['runs'],
+    'ballsFaced': batting['balls'] ?? stats['ballsFaced'],
+    'wickets': bowling['wickets'] ?? stats['wickets'],
+    'oversBowled': bowling['overs'] ?? stats['oversBowled'] ?? stats['overs'],
+    'runsConceded': bowling['runsConceded'] ?? stats['runsConceded'],
+    'battingAverage': batting['average'] ??
+        stats['battingAverage'] ??
+        stats['average'],
+    'strikeRate': batting['strikeRate'] ?? stats['strikeRate'],
+    'bowlingAverage': bowling['average'] ?? stats['bowlingAverage'],
+    'economyRate': bowling['economy'] ?? stats['economyRate'] ?? stats['economy'],
+    'highestScore': batting['highestScore'] ?? stats['highestScore'],
+    'bestBowling': bowling['bestBowling'] ?? stats['bestBowling'],
+    'catches': fielding['catches'] ?? stats['catches'],
+    'stumpings': fielding['stumpings'] ?? stats['stumpings'],
+  };
 }

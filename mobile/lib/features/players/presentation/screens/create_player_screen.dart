@@ -137,8 +137,6 @@ class _CreatePlayerScreenState extends ConsumerState<CreatePlayerScreen> {
     setState(() => _isLoading = true);
 
     final payload = <String, dynamic>{
-      'user': user.id,
-      'name': user.name,
       'playingRole': _playingRole,
       'battingStyle': _battingStyle,
       'bowlingStyle': _bowlingStyle,

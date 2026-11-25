@@ -4,6 +4,7 @@ class TournamentTeam {
   final String tournament;
   final dynamic team;
   final String status; // PENDING, APPROVED, REJECTED
+  final int rank;
   final int played;
   final int won;
   final int lost;
@@ -22,6 +23,7 @@ class TournamentTeam {
     required this.tournament,
     required this.team,
     this.status = 'PENDING',
+    this.rank = 0,
     this.played = 0,
     this.won = 0,
     this.lost = 0,
@@ -45,6 +47,7 @@ class TournamentTeam {
           : (json['tournament'] as String? ?? ''),
       team: json['team'],
       status: (json['status'] as String? ?? 'PENDING').toUpperCase(),
+      rank: json['rank'] is num ? (json['rank'] as num).toInt() : 0,
       played: json['played'] is num ? (json['played'] as num).toInt() : 0,
       won: json['won'] is num ? (json['won'] as num).toInt() : 0,
       lost: json['lost'] is num ? (json['lost'] as num).toInt() : 0,
@@ -77,6 +80,7 @@ class TournamentTeam {
       'tournament': tournament,
       'team': team is Map ? (team as Map)['id'] ?? (team as Map)['_id'] : team,
       'status': status,
+      'rank': rank,
       'played': played,
       'won': won,
       'lost': lost,
@@ -98,6 +102,7 @@ class TournamentTeam {
     String? tournament,
     dynamic team,
     String? status,
+    int? rank,
     int? played,
     int? won,
     int? lost,
@@ -116,6 +121,7 @@ class TournamentTeam {
       tournament: tournament ?? this.tournament,
       team: team ?? this.team,
       status: status ?? this.status,
+      rank: rank ?? this.rank,
       played: played ?? this.played,
       won: won ?? this.won,
       lost: lost ?? this.lost,

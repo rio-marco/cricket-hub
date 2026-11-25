@@ -10,6 +10,7 @@ import '../../../../core/widgets/empty_state_widget.dart';
 import '../../../../core/widgets/error_widget.dart';
 import '../../../../core/widgets/loading_widget.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../matches/domain/entities/match.dart';
 import '../../domain/entities/team.dart';
 import '../../domain/entities/team_member.dart';
 import '../providers/team_provider.dart';
@@ -159,6 +160,8 @@ class _TeamDetailScreenState extends ConsumerState<TeamDetailScreen>
     } else if (teamState is TeamDetailLoaded) {
       final team = teamState.team;
       final members = teamState.members;
+      final stats = teamState.stats;
+      final matches = teamState.matches;
       final isOwner = currentUser != null && currentUser.id == team.owner;
 
       return Scaffold(
@@ -343,10 +346,10 @@ class _TeamDetailScreenState extends ConsumerState<TeamDetailScreen>
               _buildMembersTab(team, members, isOwner, isDark),
 
               // TAB 2: MATCHES
-              _buildMatchesTab(team, isDark),
+              _buildMatchesTab(matches, isDark),
 
               // TAB 3: STATS
-              _buildStatsTab(team, isDark),
+              _buildStatsTab(team, stats, isDark),
             ],
           ),
         ),
@@ -608,50 +611,154 @@ class _TeamDetailScreenState extends ConsumerState<TeamDetailScreen>
     );
   }
 
-  Widget _buildMatchesTab(Team team, bool isDark) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        AppCard(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Recent & Upcoming Fixtures',
-                style: (isDark
-                        ? AppTextStyles.titleSmallDark
-                        : AppTextStyles.titleSmallLight)
-                    .copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Upcoming tournament fixtures and past match outcomes.',
-                style: (isDark
-                        ? AppTextStyles.bodySmallDark
-                        : AppTextStyles.bodySmallLight)
-                    .copyWith(
-                  color: isDark
-                      ? AppColors.textSecondaryDark
-                      : AppColors.textSecondaryLight,
+  Widget _buildMatchesTab(List<dynamic> rawMatches, bool isDark) {
+    final matches = <Match>[];
+    for (final item in rawMatches) {
+      if (item is Map) {
+        matches.add(Match.fromJson(Map<String, dynamic>.from(item)));
+      }
+    }
+
+    if (matches.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          AppCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Recent & Upcoming Fixtures',
+                  style: (isDark
+                          ? AppTextStyles.titleSmallDark
+                          : AppTextStyles.titleSmallLight)
+                      .copyWith(fontWeight: FontWeight.w700),
                 ),
-              ),
-            ],
+                const SizedBox(height: 6),
+                Text(
+                  'Upcoming tournament fixtures and past match outcomes.',
+                  style: (isDark
+                          ? AppTextStyles.bodySmallDark
+                          : AppTextStyles.bodySmallLight)
+                      .copyWith(
+                    color: isDark
+                        ? AppColors.textSecondaryDark
+                        : AppColors.textSecondaryLight,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 24),
-        const EmptyStateWidget(
-          title: 'No Matches Scheduled',
-          subtitle:
-              'This team has no upcoming fixtures or past matches recorded yet.',
-          icon: Icons.sports_cricket_outlined,
-        ),
-      ],
+          const SizedBox(height: 24),
+          const EmptyStateWidget(
+            title: 'No Matches Scheduled',
+            subtitle:
+                'This team has no upcoming fixtures or past matches recorded yet.',
+            icon: Icons.sports_cricket_outlined,
+          ),
+        ],
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: matches.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Text(
+              'Recent & Upcoming Fixtures',
+              style: (isDark
+                      ? AppTextStyles.titleSmallDark
+                      : AppTextStyles.titleSmallLight)
+                  .copyWith(fontWeight: FontWeight.w700),
+            ),
+          );
+        }
+
+        final match = matches[index - 1];
+        final score =
+            '${match.teamAScore ?? '-'} / ${match.teamBScore ?? '-'}';
+        final result = match.result?.description;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: AppCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${_teamName(match.teamA)} vs ${_teamName(match.teamB)}',
+                        style: (isDark
+                                ? AppTextStyles.bodyLargeDark
+                                : AppTextStyles.bodyLargeLight)
+                            .copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildStatusChip(match.status),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '${match.format} • ${_formatMatchDate(match.matchDate)}',
+                  style: isDark
+                      ? AppTextStyles.bodySmallDark
+                      : AppTextStyles.bodySmallLight,
+                ),
+                if (match.venue != null && match.venue!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    match.venue!,
+                    style: isDark
+                        ? AppTextStyles.bodySmallDark
+                        : AppTextStyles.bodySmallLight,
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Text(
+                  'Score: $score',
+                  style: (isDark
+                          ? AppTextStyles.bodyMediumDark
+                          : AppTextStyles.bodyMediumLight)
+                      .copyWith(fontWeight: FontWeight.w600),
+                ),
+                if (result != null && result.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    result,
+                    style: isDark
+                        ? AppTextStyles.bodySmallDark
+                        : AppTextStyles.bodySmallLight,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildStatsTab(Team team, bool isDark) {
-    final winPercentage = team.winRate;
+  Widget _buildStatsTab(Team team, Map<String, dynamic> stats, bool isDark) {
+    final matchStats = _asMap(stats['matches']);
+    final batting = _asMap(stats['batting']);
+    final bowling = _asMap(stats['bowling']);
+    final played = _asInt(matchStats['played']) ?? team.totalMatches;
+    final won = _asInt(matchStats['won']) ?? team.wonMatches;
+    final lost = _asInt(matchStats['lost']) ?? team.lostMatches;
+    final winPercentage =
+        _asDouble(matchStats['winPercentage']) ?? team.winRate;
+    final totalRuns = _asInt(batting['totalRunsScored']);
+    final highestScore = _asInt(batting['highestScore']);
+    final lowestScore = _asInt(batting['lowestScore']);
+    final totalWickets = _asInt(bowling['totalWicketsTaken']);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -672,16 +779,16 @@ class _TeamDetailScreenState extends ConsumerState<TeamDetailScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildStatItem('Played', '${team.totalMatches}', isDark),
+                  _buildStatItem('Played', '$played', isDark),
                   _buildStatItem(
                     'Won',
-                    '${team.wonMatches}',
+                    '$won',
                     isDark,
                     color: AppColors.success,
                   ),
                   _buildStatItem(
                     'Lost',
-                    '${team.lostMatches}',
+                    '$lost',
                     isDark,
                     color: AppColors.error,
                   ),
@@ -694,13 +801,10 @@ class _TeamDetailScreenState extends ConsumerState<TeamDetailScreen>
                 ],
               ),
               const SizedBox(height: 20),
-              // Linear Progress Bar for Win Rate
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
-                  value: team.totalMatches > 0
-                      ? team.wonMatches / team.totalMatches
-                      : 0.0,
+                  value: played > 0 ? won / played : 0.0,
                   backgroundColor: isDark
                       ? const Color(0xFF333333)
                       : Colors.grey.shade200,
@@ -714,7 +818,7 @@ class _TeamDetailScreenState extends ConsumerState<TeamDetailScreen>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '${team.wonMatches} Wins',
+                    '$won Wins',
                     style: TextStyle(
                       fontSize: 11,
                       color: AppColors.success,
@@ -722,7 +826,7 @@ class _TeamDetailScreenState extends ConsumerState<TeamDetailScreen>
                     ),
                   ),
                   Text(
-                    '${team.lostMatches} Losses',
+                    '$lost Losses',
                     style: TextStyle(
                       fontSize: 11,
                       color: AppColors.error,
@@ -734,7 +838,98 @@ class _TeamDetailScreenState extends ConsumerState<TeamDetailScreen>
             ],
           ),
         ),
+        if (totalRuns != null ||
+            highestScore != null ||
+            lowestScore != null ||
+            totalWickets != null) ...[
+          const SizedBox(height: 16),
+          AppCard(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Batting & Bowling',
+                  style: (isDark
+                          ? AppTextStyles.titleMediumDark
+                          : AppTextStyles.titleMediumLight)
+                      .copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    if (totalRuns != null)
+                      _buildStatItem('Runs', '$totalRuns', isDark),
+                    if (highestScore != null)
+                      _buildStatItem('HS', '$highestScore', isDark),
+                    if (lowestScore != null)
+                      _buildStatItem('LS', '$lowestScore', isDark),
+                    if (totalWickets != null)
+                      _buildStatItem('Wickets', '$totalWickets', isDark),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
+    );
+  }
+
+  Map<String, dynamic> _asMap(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
+  }
+
+  int? _asInt(dynamic value) {
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  double? _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  String _teamName(dynamic team) {
+    if (team is Map) {
+      return team['name']?.toString() ?? team['_id']?.toString() ?? 'TBD';
+    }
+    return team?.toString() ?? 'TBD';
+  }
+
+  String _formatMatchDate(DateTime? date) {
+    if (date == null) return 'Date TBD';
+    return DateFormat('dd MMM yyyy').format(date);
+  }
+
+  Widget _buildStatusChip(String status) {
+    final normalized = status.toUpperCase();
+    final color = switch (normalized) {
+      'COMPLETED' => AppColors.success,
+      'LIVE' || 'TOSS' => AppColors.error,
+      'CANCELLED' || 'ABANDONED' => AppColors.textSecondaryLight,
+      _ => AppColors.primary,
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        normalized,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
     );
   }
 

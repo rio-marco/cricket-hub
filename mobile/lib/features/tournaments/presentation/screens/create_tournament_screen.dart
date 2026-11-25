@@ -176,12 +176,11 @@ class _CreateTournamentScreenState extends ConsumerState<CreateTournamentScreen>
       'maxPlayersPerTeam': maxPlayers,
       'registrationFee': fee,
       'rules': _rulesController.text.trim(),
-      'status': 'REGISTRATION_OPEN',
     };
 
     final result = await ref
         .read(tournamentActionProvider.notifier)
-        .createTournament(data);
+        .createTournament(data, openRegistration: true);
 
     if (result != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

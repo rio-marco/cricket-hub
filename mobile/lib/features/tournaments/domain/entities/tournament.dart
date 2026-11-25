@@ -101,7 +101,11 @@ class Tournament {
       status: (json['status'] as String? ?? 'DRAFT').toUpperCase(),
       teamsCount: json['teamsCount'] is num
           ? (json['teamsCount'] as num).toInt()
-          : (json['teams'] is List ? (json['teams'] as List).length : 0),
+          : (json['totalRegisteredTeams'] is num
+              ? (json['totalRegisteredTeams'] as num).toInt()
+              : (json['approvedTeamsCount'] is num
+                  ? (json['approvedTeamsCount'] as num).toInt()
+                  : (json['teams'] is List ? (json['teams'] as List).length : 0))),
       createdAt: parseNullableDate(json['createdAt']),
     );
   }

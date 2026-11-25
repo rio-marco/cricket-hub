@@ -5,11 +5,8 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/empty_state_widget.dart';
 import '../../../../core/widgets/error_widget.dart';
-import '../../../../core/widgets/loading_widget.dart';
-import '../../domain/entities/team.dart';
 import '../providers/team_provider.dart';
 import '../widgets/team_card.dart';
 
@@ -25,6 +22,7 @@ class _TeamsScreenState extends ConsumerState<TeamsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
+  bool _isLoadingMore = false;
 
   @override
   void initState() {
@@ -159,6 +157,16 @@ class _TeamsScreenState extends ConsumerState<TeamsScreen>
             emptyMessage: 'No teams found matching your query.',
             emptyActionText: 'Create New Team',
             onEmptyAction: () => context.push(AppRoutes.createTeam),
+            hasNextPage: allTeamsState is TeamListLoaded
+                ? allTeamsState.hasNextPage
+                : false,
+            onLoadMore: _isLoadingMore
+                ? null
+                : () async {
+                    setState(() => _isLoadingMore = true);
+                    await ref.read(teamsListProvider.notifier).loadMore();
+                    if (mounted) setState(() => _isLoadingMore = false);
+                  },
           ),
 
           // TAB 2: MY TEAMS
@@ -196,6 +204,8 @@ class _TeamsScreenState extends ConsumerState<TeamsScreen>
     required String emptyMessage,
     required String emptyActionText,
     required VoidCallback onEmptyAction,
+    bool hasNextPage = false,
+    Future<void> Function()? onLoadMore,
   }) {
     if (state is TeamListLoading) {
       return _buildShimmerLoading();
@@ -233,8 +243,21 @@ class _TeamsScreenState extends ConsumerState<TeamsScreen>
             top: 14,
             bottom: 88, // Space for FAB
           ),
-          itemCount: state.teams.length,
+          itemCount: state.teams.length + (hasNextPage ? 1 : 0),
           itemBuilder: (context, index) {
+            if (hasNextPage && index == state.teams.length) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+
+            if (hasNextPage && index == state.teams.length - 1) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                onLoadMore?.call();
+              });
+            }
+
             final team = state.teams[index];
             return TeamCard(
               team: team,

@@ -17,6 +17,9 @@ import { MESSAGES } from '../constants/messages';
 import { ApiError } from '../utils/apiError';
 import { getPaginationParams, buildPaginationResponse, IPaginationMeta } from '../utils/pagination';
 
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export interface ITournamentListResult {
   tournaments: ITournament[];
   pagination: IPaginationMeta;
@@ -78,7 +81,7 @@ export class TournamentService {
     }
 
     if (query.city) {
-      filter.city = new RegExp(String(query.city).trim(), 'i');
+      filter.city = new RegExp(escapeRegExp(String(query.city).trim()), 'i');
     }
 
     if (query.format) {
@@ -90,7 +93,7 @@ export class TournamentService {
     }
 
     if (query.search) {
-      const searchRegex = new RegExp(String(query.search).trim(), 'i');
+      const searchRegex = new RegExp(escapeRegExp(String(query.search).trim()), 'i');
       filter.$or = [
         { name: searchRegex },
         { city: searchRegex },

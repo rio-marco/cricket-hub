@@ -6,6 +6,9 @@ import 'package:mobile/core/theme/app_colors.dart';
 import 'package:mobile/core/theme/app_text_styles.dart';
 import 'package:mobile/core/widgets/app_button.dart';
 import 'package:mobile/core/widgets/app_text_field.dart';
+
+import '../../../teams/domain/entities/team.dart';
+import '../../../teams/presentation/providers/team_provider.dart';
 import '../../../tournaments/presentation/providers/tournament_provider.dart';
 import '../providers/match_provider.dart';
 
@@ -22,11 +25,10 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
 
   // Tournament selector (optional)
   String? _selectedTournamentId;
-  String? _selectedTournamentName;
 
   // Teams
-  final _teamAController = TextEditingController();
-  final _teamBController = TextEditingController();
+  String? _teamAId;
+  String? _teamBId;
 
   // Match Format & Overs
   String _matchFormat = 'T20'; // T10, T20, ODI, CUSTOM
@@ -37,12 +39,12 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
   final _venueController = TextEditingController();
   final _cityController = TextEditingController();
   DateTime _matchDate = DateTime.now().add(const Duration(hours: 2));
-  TimeOfDay _matchTime = TimeOfDay.fromDateTime(DateTime.now().add(const Duration(hours: 2)));
+  TimeOfDay _matchTime = TimeOfDay.fromDateTime(
+    DateTime.now().add(const Duration(hours: 2)),
+  );
 
   @override
   void dispose() {
-    _teamAController.dispose();
-    _teamBController.dispose();
     _oversController.dispose();
     _venueController.dispose();
     _cityController.dispose();
@@ -113,12 +115,18 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final teamA = _teamAController.text.trim();
-    final teamB = _teamBController.text.trim();
-
-    if (teamA.toLowerCase() == teamB.toLowerCase()) {
+    if (_teamAId == null || _teamBId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Team A and Team B must be different opposing teams')),
+        const SnackBar(content: Text('Please select both opposing teams')),
+      );
+      return;
+    }
+
+    if (_teamAId == _teamBId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Team A and Team B must be different opposing teams'),
+        ),
       );
       return;
     }
@@ -126,14 +134,8 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
     final overs = int.tryParse(_oversController.text.trim()) ?? 20;
 
     final data = <String, dynamic>{
-      'teamA': {
-        'id': 'team_a_${DateTime.now().millisecondsSinceEpoch}',
-        'name': teamA,
-      },
-      'teamB': {
-        'id': 'team_b_${DateTime.now().millisecondsSinceEpoch}',
-        'name': teamB,
-      },
+      'teamA': _teamAId,
+      'teamB': _teamBId,
       'format': _matchFormat,
       'totalOvers': overs,
       'ballType': _ballType,
@@ -144,26 +146,24 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
           ? _cityController.text.trim()
           : 'Mumbai',
       'matchDate': _matchDate.toIso8601String(),
-      'status': 'UPCOMING',
-      'currentInnings': 1,
-      if (_selectedTournamentId != null)
-        'tournament': {
-          'id': _selectedTournamentId,
-          'name': _selectedTournamentName,
-        },
+      if (_selectedTournamentId != null) 'tournamentId': _selectedTournamentId,
     };
 
-    final newMatch = await ref.read(matchActionProvider.notifier).createMatch(data);
+    final newMatch = await ref
+        .read(matchActionProvider.notifier)
+        .createMatch(data);
 
     if (newMatch != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.showSnackBar(
         SnackBar(
-          content: Text('${newMatch.teamAName} vs ${newMatch.teamBName} created!'),
+          content: Text(
+            '${newMatch.teamAName} vs ${newMatch.teamBName} created!',
+          ),
           backgroundColor: AppColors.success,
         ),
       );
       ref.read(matchesListProvider.notifier).loadMatches(refresh: true);
-      // Navigate to toss screen for this match
       context.pushReplacement('/matches/${newMatch.id}/toss');
     }
   }
@@ -172,24 +172,48 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    ref.listen<MatchActionState>(matchActionProvider, (previous, next) {
+      final message = next.errorMessage;
+      if (message != null && message != previous?.errorMessage && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: AppColors.error),
+        );
+      }
+    });
     final actionState = ref.watch(matchActionProvider);
     final tournamentsState = ref.watch(tournamentsListProvider);
+    final myTeamsState = ref.watch(myTeamsProvider);
+    final teams = myTeamsState is TeamListLoaded
+        ? myTeamsState.teams
+        : const <Team>[];
+    final teamsLoading = myTeamsState is TeamListLoading;
+    final teamsError = myTeamsState is TeamListError
+        ? myTeamsState.message
+        : null;
 
-    final dateTimeFormatted = DateFormat('EEE, dd MMM yyyy • hh:mm a').format(_matchDate);
+    final dateTimeFormatted = DateFormat('EEE, dd MMM yyyy • hh:mm a')
+        .format(_matchDate);
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+      backgroundColor: isDark
+          ? AppColors.backgroundDark
+          : AppColors.backgroundLight,
       appBar: AppBar(
         title: Text(
           'Create Match Fixture',
-          style: (isDark ? AppTextStyles.titleLargeDark : AppTextStyles.titleLargeLight)
-              .copyWith(fontWeight: FontWeight.w700),
+          style:
+              (isDark
+                      ? AppTextStyles.titleLargeDark
+                      : AppTextStyles.titleLargeLight)
+                  .copyWith(fontWeight: FontWeight.w700),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
         ),
-        backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+        backgroundColor: isDark
+            ? AppColors.surfaceDark
+            : AppColors.surfaceLight,
         elevation: 0,
       ),
       body: SingleChildScrollView(
@@ -210,21 +234,28 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
               _buildSectionLabel('Opposing Teams *', isDark),
               const SizedBox(height: 10),
 
-              AppTextField(
-                controller: _teamAController,
-                labelText: 'Team A Name *',
-                hintText: 'e.g. Mumbai Warriors',
-                prefixIcon: const Icon(Icons.shield_outlined, color: AppColors.primary),
-                validator: (v) =>
-                    (v == null || v.trim().length < 2) ? 'Please enter Team A name' : null,
+              _buildTeamDropdown(
+                label: 'Team A *',
+                value: _teamAId,
+                teams: teams,
+                isLoading: teamsLoading,
+                errorMessage: teamsError,
+                icon: Icons.shield_outlined,
+                isDark: isDark,
+                onChanged: (value) => setState(() => _teamAId = value),
               ),
 
               const SizedBox(height: 12),
               Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06),
+                    color: isDark
+                        ? Colors.white.withOpacity(0.08)
+                        : Colors.black.withOpacity(0.06),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -232,7 +263,9 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
-                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                      color: isDark
+                          ? AppColors.textSecondaryDark
+                          : AppColors.textSecondaryLight,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -240,13 +273,15 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
               ),
               const SizedBox(height: 12),
 
-              AppTextField(
-                controller: _teamBController,
-                labelText: 'Team B Name *',
-                hintText: 'e.g. Marine Drive Strikers',
-                prefixIcon: const Icon(Icons.shield_rounded, color: AppColors.secondaryLight),
-                validator: (v) =>
-                    (v == null || v.trim().length < 2) ? 'Please enter Team B name' : null,
+              _buildTeamDropdown(
+                label: 'Team B *',
+                value: _teamBId,
+                teams: teams,
+                isLoading: teamsLoading,
+                errorMessage: teamsError,
+                icon: Icons.shield_rounded,
+                isDark: isDark,
+                onChanged: (value) => setState(() => _teamBId = value),
               ),
 
               const SizedBox(height: 24),
@@ -291,15 +326,30 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _buildBallChip('Tennis Ball', 'TENNIS', Icons.sports_tennis_rounded, isDark),
+                    child: _buildBallChip(
+                      'Tennis Ball',
+                      'TENNIS',
+                      Icons.sports_tennis_rounded,
+                      isDark,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _buildBallChip('White Leather', 'WHITE', Icons.circle_outlined, isDark),
+                    child: _buildBallChip(
+                      'White Leather',
+                      'WHITE',
+                      Icons.circle_outlined,
+                      isDark,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _buildBallChip('Red Leather', 'RED', Icons.circle, isDark),
+                    child: _buildBallChip(
+                      'Red Leather',
+                      'RED',
+                      Icons.circle,
+                      isDark,
+                    ),
                   ),
                 ],
               ),
@@ -318,7 +368,9 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
                       labelText: 'Ground Venue *',
                       hintText: 'e.g. Wankhede Stadium',
                       prefixIcon: const Icon(Icons.stadium_outlined),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter venue' : null,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Enter venue'
+                          : null,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -343,12 +395,17 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
                 onTap: _pickDateTime,
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
                     color: isDark ? AppColors.cardDark : AppColors.cardLight,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
+                      color: isDark
+                          ? const Color(0xFF333333)
+                          : const Color(0xFFE0E0E0),
                     ),
                   ),
                   child: Row(
@@ -356,16 +413,27 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.access_time_rounded, color: AppColors.primary, size: 20),
+                          const Icon(
+                            Icons.access_time_rounded,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
                           const SizedBox(width: 12),
                           Text(
                             dateTimeFormatted,
-                            style: (isDark ? AppTextStyles.bodyMediumDark : AppTextStyles.bodyMediumLight)
-                                .copyWith(fontWeight: FontWeight.w700),
+                            style:
+                                (isDark
+                                        ? AppTextStyles.bodyMediumDark
+                                        : AppTextStyles.bodyMediumLight)
+                                    .copyWith(fontWeight: FontWeight.w700),
                           ),
                         ],
                       ),
-                      const Icon(Icons.edit_calendar_rounded, size: 18, color: AppColors.primary),
+                      const Icon(
+                        Icons.edit_calendar_rounded,
+                        size: 18,
+                        color: AppColors.primary,
+                      ),
                     ],
                   ),
                 ),
@@ -400,6 +468,75 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
     );
   }
 
+  Widget _buildTeamDropdown({
+    required String label,
+    required String? value,
+    required List<Team> teams,
+    required bool isLoading,
+    required String? errorMessage,
+    required IconData icon,
+    required bool isDark,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final hint = isLoading
+        ? 'Loading teams...'
+        : errorMessage != null
+        ? 'Unable to load teams'
+        : teams.isEmpty
+        ? 'No teams available'
+        : 'Select $label';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : AppColors.cardLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.primary, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DropdownButton<String?>(
+              value: value,
+              isExpanded: true,
+              underline: const SizedBox.shrink(),
+              hint: Text(
+                hint,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark
+                      ? AppColors.textSecondaryDark
+                      : AppColors.textSecondaryLight,
+                ),
+              ),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('Select a team'),
+                ),
+                ...teams.map(
+                  (team) => DropdownMenuItem<String?>(
+                    value: team.id,
+                    child: Text(
+                      team.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+              onChanged: teams.isEmpty ? null : onChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTournamentDropdown(List<dynamic> tournaments, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -418,7 +555,9 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
             'Standalone Match (No Tournament)',
             style: TextStyle(
               fontSize: 13,
-              color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+              color: isDark
+                  ? AppColors.textSecondaryDark
+                  : AppColors.textSecondaryLight,
             ),
           ),
           items: [
@@ -438,15 +577,7 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
             }),
           ],
           onChanged: (val) {
-            setState(() {
-              _selectedTournamentId = val;
-              if (val != null) {
-                final found = tournaments.firstWhere((t) => t.id == val, orElse: () => null);
-                _selectedTournamentName = found?.name;
-              } else {
-                _selectedTournamentName = null;
-              }
-            });
+            setState(() => _selectedTournamentId = val);
           },
         ),
       ),
@@ -471,7 +602,12 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
     );
   }
 
-  Widget _buildBallChip(String label, String value, IconData icon, bool isDark) {
+  Widget _buildBallChip(
+    String label,
+    String value,
+    IconData icon,
+    bool isDark,
+  ) {
     final isSelected = _ballType == value;
     return InkWell(
       onTap: () => setState(() => _ballType = value),
@@ -484,7 +620,9 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
               : (isDark ? AppColors.cardDark : AppColors.cardLight),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected ? AppColors.primary : (isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0)),
+            color: isSelected
+                ? AppColors.primary
+                : (isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0)),
             width: isSelected ? 1.6 : 1,
           ),
         ),
@@ -493,7 +631,11 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
             Icon(
               icon,
               size: 18,
-              color: isSelected ? AppColors.primary : (isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight),
+              color: isSelected
+                  ? AppColors.primary
+                  : (isDark
+                        ? AppColors.textSecondaryDark
+                        : AppColors.textSecondaryLight),
             ),
             const SizedBox(height: 4),
             Text(
@@ -501,7 +643,11 @@ class _CreateMatchScreenState extends ConsumerState<CreateMatchScreen> {
               style: TextStyle(
                 fontSize: 10.5,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected ? AppColors.primary : (isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight),
+                color: isSelected
+                    ? AppColors.primary
+                    : (isDark
+                          ? AppColors.textPrimaryDark
+                          : AppColors.textPrimaryLight),
               ),
               textAlign: TextAlign.center,
             ),

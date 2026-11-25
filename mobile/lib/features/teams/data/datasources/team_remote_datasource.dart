@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:dio/dio.dart';
 import '../../../../core/constants/api_endpoints.dart';
 import '../../../../core/errors/exceptions.dart';
@@ -21,7 +20,7 @@ abstract class TeamRemoteDataSource {
     required String name,
     String? description,
     String? location,
-    dynamic logoFile,
+    String? logo,
   });
   Future<Team> updateTeam(String id, Map<String, dynamic> data);
   Future<void> deleteTeam(String id);
@@ -36,6 +35,8 @@ abstract class TeamRemoteDataSource {
   Future<List<TeamInvitation>> getUserInvitations();
   Future<void> removePlayer(String teamId, String playerId);
   Future<void> updateMemberRole(String teamId, String memberId, String role);
+  Future<Map<String, dynamic>> getTeamStats(String teamId);
+  Future<List<dynamic>> getTeamMatches(String teamId);
 }
 
 /// Implementation of [TeamRemoteDataSource] utilizing Dio HTTP client.
@@ -58,7 +59,6 @@ class TeamRemoteDataSourceImpl implements TeamRemoteDataSource {
       };
       if (search != null && search.trim().isNotEmpty) {
         queryParams['search'] = search.trim();
-        queryParams['q'] = search.trim();
       }
       if (ownerId != null && ownerId.isNotEmpty) {
         queryParams['owner'] = ownerId;
@@ -116,40 +116,20 @@ class TeamRemoteDataSourceImpl implements TeamRemoteDataSource {
     required String name,
     String? description,
     String? location,
-    dynamic logoFile,
+    String? logo,
   }) async {
     try {
-      Response response;
-      if (logoFile != null) {
-        final filePath = logoFile is File ? logoFile.path : logoFile.toString();
-        final fileName = filePath.split('/').last;
-
-        final formData = FormData.fromMap({
+      final response = await _dio.post(
+        ApiEndpoints.teams,
+        data: {
           'name': name.trim(),
           if (description != null && description.isNotEmpty)
             'description': description.trim(),
           if (location != null && location.isNotEmpty)
             'location': location.trim(),
-          'logo': await MultipartFile.fromFile(filePath, filename: fileName),
-        });
-
-        response = await _dio.post(
-          ApiEndpoints.teams,
-          data: formData,
-          options: Options(contentType: 'multipart/form-data'),
-        );
-      } else {
-        response = await _dio.post(
-          ApiEndpoints.teams,
-          data: {
-            'name': name.trim(),
-            if (description != null && description.isNotEmpty)
-              'description': description.trim(),
-            if (location != null && location.isNotEmpty)
-              'location': location.trim(),
-          },
-        );
-      }
+          if (logo != null && logo.isNotEmpty) 'logo': logo.trim(),
+        },
+      );
 
       final data = response.data;
       if (data is Map<String, dynamic>) {
@@ -273,9 +253,9 @@ class TeamRemoteDataSourceImpl implements TeamRemoteDataSource {
   @override
   Future<void> respondToInvitation(String invitationId, bool accept) async {
     try {
-      await _dio.post(
-        '${ApiEndpoints.teams}/invitations/$invitationId/respond',
-        data: {'accept': accept, 'status': accept ? 'ACCEPTED' : 'REJECTED'},
+      await _dio.put(
+        ApiEndpoints.respondToInvitation(invitationId),
+        data: {'status': accept ? 'ACCEPTED' : 'REJECTED'},
       );
     } catch (e) {
       _handleError(e);
@@ -285,7 +265,7 @@ class TeamRemoteDataSourceImpl implements TeamRemoteDataSource {
   @override
   Future<List<TeamInvitation>> getUserInvitations() async {
     try {
-      final response = await _dio.get('${ApiEndpoints.teams}/invitations/my');
+      final response = await _dio.get(ApiEndpoints.userInvitations);
       final data = response.data;
 
       List<dynamic> list = [];
@@ -300,7 +280,7 @@ class TeamRemoteDataSourceImpl implements TeamRemoteDataSource {
       }
 
       return list
-          .map((item) => TeamInvitation.fromJson(item as Map<String, dynamic>))
+          .map((item) => TeamInvitation.fromJson(Map<String, dynamic>.from(item as Map)))
           .toList();
     } catch (e) {
       _handleError(e);
@@ -323,10 +303,46 @@ class TeamRemoteDataSourceImpl implements TeamRemoteDataSource {
     String role,
   ) async {
     try {
-      await _dio.patch(
-        ApiEndpoints.teamMemberById(teamId, memberId),
+      await _dio.put(
+        ApiEndpoints.teamMemberRole(teamId, memberId),
         data: {'role': role},
       );
+    } catch (e) {
+      _handleError(e);
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> getTeamStats(String teamId) async {
+    try {
+      final response = await _dio.get(ApiEndpoints.teamStats(teamId));
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        final wrapped = data['data'];
+        if (wrapped is Map<String, dynamic>) return wrapped;
+        return data;
+      }
+      return <String, dynamic>{};
+    } catch (e) {
+      _handleError(e);
+    }
+  }
+
+  @override
+  Future<List<dynamic>> getTeamMatches(String teamId) async {
+    try {
+      final response = await _dio.get(
+        ApiEndpoints.teamMatches(teamId),
+        queryParameters: {'limit': 20},
+      );
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        final wrapped = data['data'];
+        if (wrapped is List) return wrapped;
+      } else if (data is List) {
+        return data;
+      }
+      return const [];
     } catch (e) {
       _handleError(e);
     }
@@ -349,6 +365,15 @@ class TeamRemoteDataSourceImpl implements TeamRemoteDataSource {
             message;
         if (responseData['errors'] is Map) {
           errors = Map<String, dynamic>.from(responseData['errors'] as Map);
+        } else if (responseData['errors'] is List) {
+          final mapped = <String, dynamic>{};
+          for (final item in responseData['errors'] as List) {
+            if (item is Map) {
+              mapped[item['field']?.toString() ?? 'general'] =
+                  item['message']?.toString() ?? 'Invalid value';
+            }
+          }
+          if (mapped.isNotEmpty) errors = mapped;
         }
       } else if (responseData is String && responseData.isNotEmpty) {
         message = responseData;

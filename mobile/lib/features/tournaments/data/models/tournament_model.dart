@@ -83,7 +83,11 @@ class TournamentModel extends Tournament {
       status: (map['status'] as String? ?? 'DRAFT').toUpperCase(),
       teamsCount: map['teamsCount'] is num
           ? (map['teamsCount'] as num).toInt()
-          : (map['teams'] is List ? (map['teams'] as List).length : 0),
+          : (map['totalRegisteredTeams'] is num
+              ? (map['totalRegisteredTeams'] as num).toInt()
+              : (map['approvedTeamsCount'] is num
+                  ? (map['approvedTeamsCount'] as num).toInt()
+                  : (map['teams'] is List ? (map['teams'] as List).length : 0))),
       createdAt: parseNullableDate(map['createdAt']),
     );
   }

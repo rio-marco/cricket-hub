@@ -41,29 +41,32 @@ class DashboardMatch {
   });
 
   factory DashboardMatch.fromJson(Map<String, dynamic> json) {
-    // Determine Team A info
     String teamAName = 'Team A';
     String? teamALogo;
+    String? teamAId;
     if (json['teamA'] is Map) {
-      teamAName = (json['teamA'] as Map)['name']?.toString() ?? 'Team A';
-      teamALogo = (json['teamA'] as Map)['logo']?.toString();
+      final teamA = json['teamA'] as Map;
+      teamAName = teamA['name']?.toString() ?? 'Team A';
+      teamALogo = teamA['logo']?.toString();
+      teamAId = teamA['_id']?.toString() ?? teamA['id']?.toString();
     } else if (json['teamAName'] != null) {
       teamAName = json['teamAName'].toString();
       teamALogo = json['teamALogo']?.toString();
     }
 
-    // Determine Team B info
     String teamBName = 'Team B';
     String? teamBLogo;
+    String? teamBId;
     if (json['teamB'] is Map) {
-      teamBName = (json['teamB'] as Map)['name']?.toString() ?? 'Team B';
-      teamBLogo = (json['teamB'] as Map)['logo']?.toString();
+      final teamB = json['teamB'] as Map;
+      teamBName = teamB['name']?.toString() ?? 'Team B';
+      teamBLogo = teamB['logo']?.toString();
+      teamBId = teamB['_id']?.toString() ?? teamB['id']?.toString();
     } else if (json['teamBName'] != null) {
       teamBName = json['teamBName'].toString();
       teamBLogo = json['teamBLogo']?.toString();
     }
 
-    // Score details
     int aRuns = json['teamARuns'] as int? ?? 0;
     int aWickets = json['teamAWickets'] as int? ?? 0;
     double aOvers = (json['teamAOvers'] as num?)?.toDouble() ?? 0.0;
@@ -71,23 +74,65 @@ class DashboardMatch {
     int bWickets = json['teamBWickets'] as int? ?? 0;
     double bOvers = (json['teamBOvers'] as num?)?.toDouble() ?? 0.0;
 
-    // Handle innings if available
-    if (json['innings'] is List && (json['innings'] as List).isNotEmpty) {
-      final inngs = json['innings'] as List;
-      if (inngs.isNotEmpty && inngs[0] is Map) {
-        aRuns = inngs[0]['totalRuns'] as int? ?? aRuns;
-        aWickets = inngs[0]['totalWickets'] as int? ?? aWickets;
-        aOvers = (inngs[0]['overs'] as num?)?.toDouble() ?? aOvers;
-      }
-      if (inngs.length > 1 && inngs[1] is Map) {
-        bRuns = inngs[1]['totalRuns'] as int? ?? bRuns;
-        bWickets = inngs[1]['totalWickets'] as int? ?? bWickets;
-        bOvers = (inngs[1]['overs'] as num?)?.toDouble() ?? bOvers;
+    final rawInnings = json['innings'] is List
+        ? json['innings'] as List
+        : (json['activeInnings'] is Map ? [json['activeInnings']] : const []);
+    for (var index = 0; index < rawInnings.length; index++) {
+      final entry = rawInnings[index];
+      if (entry is! Map) continue;
+      final battingTeam = entry['battingTeam'];
+      final battingId = battingTeam is Map
+          ? battingTeam['_id']?.toString() ?? battingTeam['id']?.toString()
+          : null;
+      final battingName =
+          battingTeam is Map ? battingTeam['name']?.toString() : null;
+      final belongsToA = battingId != null && teamAId != null
+          ? battingId == teamAId
+          : (battingName != null ? battingName == teamAName : index == 0);
+      final belongsToB = battingId != null && teamBId != null
+          ? battingId == teamBId
+          : !belongsToA;
+
+      final runs = (entry['totalRuns'] as num?)?.toInt() ?? 0;
+      final wickets = (entry['totalWickets'] as num?)?.toInt() ?? 0;
+      final overs =
+          ((entry['totalOvers'] ?? entry['overs']) as num?)?.toDouble() ?? 0.0;
+      if (belongsToA && !belongsToB) {
+        aRuns = runs;
+        aWickets = wickets;
+        aOvers = overs;
+      } else {
+        bRuns = runs;
+        bWickets = wickets;
+        bOvers = overs;
       }
     }
 
+    final status = (json['status'] as String? ?? 'UPCOMING').toUpperCase();
+    final result = json['result'] is Map ? json['result'] as Map : null;
+    final winner = result?['winner'];
+    final winnerName = winner is Map ? winner['name']?.toString() : null;
+    final margin = result?['margin'];
+    String statusText;
+    if (status == 'COMPLETED') {
+      final description = result?['description']?.toString();
+      if (description != null && description.isNotEmpty) {
+        statusText = description;
+      } else if (winnerName != null) {
+        statusText = margin != null
+            ? '$winnerName won by $margin'
+            : '$winnerName won';
+      } else {
+        statusText = 'Match completed';
+      }
+    } else if (status == 'UPCOMING') {
+      statusText = 'Scheduled';
+    } else {
+      statusText = 'Match in progress';
+    }
+
     return DashboardMatch(
-      id: json['id'] as String? ?? json['_id'] as String? ?? '',
+      id: json['id']?.toString() ?? json['_id']?.toString() ?? '',
       teamAName: teamAName,
       teamALogo: teamALogo,
       teamBName: teamBName,
@@ -98,18 +143,18 @@ class DashboardMatch {
       teamBRuns: bRuns,
       teamBWickets: bWickets,
       teamBOvers: bOvers,
-      status: (json['status'] as String? ?? 'LIVE').toUpperCase(),
-      statusText: json['statusText'] as String? ??
-          json['summary'] as String? ??
-          'Match in progress',
+      status: status,
+      statusText: statusText,
       tournamentName: json['tournament'] is Map
           ? (json['tournament'] as Map)['name']?.toString()
           : json['tournamentName']?.toString(),
       venue: json['venue']?.toString(),
       format: json['format']?.toString() ?? 'T20',
-      startTime: json['startTime'] != null
-          ? DateTime.tryParse(json['startTime'].toString())
-          : null,
+      startTime: json['matchDate'] != null
+          ? DateTime.tryParse(json['matchDate'].toString())
+          : (json['startTime'] != null
+              ? DateTime.tryParse(json['startTime'].toString())
+              : null),
     );
   }
 

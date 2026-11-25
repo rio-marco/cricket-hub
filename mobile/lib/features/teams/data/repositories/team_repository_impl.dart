@@ -52,14 +52,14 @@ class TeamRepositoryImpl implements TeamRepository {
     required String name,
     String? description,
     String? location,
-    dynamic logoFile,
+    String? logo,
   }) async {
     try {
       return await _remoteDataSource.createTeam(
         name: name,
         description: description,
         location: location,
-        logoFile: logoFile,
+        logo: logo,
       );
     } on AppException catch (e) {
       throw Failure.fromException(e);
@@ -172,6 +172,28 @@ class TeamRepositoryImpl implements TeamRepository {
   ) async {
     try {
       await _remoteDataSource.updateMemberRole(teamId, memberId, role);
+    } on AppException catch (e) {
+      throw Failure.fromException(e);
+    } catch (e) {
+      throw ServerFailure(message: e.toString());
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> getTeamStats(String teamId) async {
+    try {
+      return await _remoteDataSource.getTeamStats(teamId);
+    } on AppException catch (e) {
+      throw Failure.fromException(e);
+    } catch (e) {
+      throw ServerFailure(message: e.toString());
+    }
+  }
+
+  @override
+  Future<List<dynamic>> getTeamMatches(String teamId) async {
+    try {
+      return await _remoteDataSource.getTeamMatches(teamId);
     } on AppException catch (e) {
       throw Failure.fromException(e);
     } catch (e) {

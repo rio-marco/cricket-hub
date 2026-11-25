@@ -1,7 +1,9 @@
 import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../config/app_config.dart';
 import '../constants/api_endpoints.dart';
 import '../errors/exceptions.dart';
@@ -18,9 +20,9 @@ class ApiClient {
     required AppConfig config,
     required SecureStorage storage,
     Dio? dio,
-  })  : _config = config,
-        _storage = storage,
-        _dio = dio ?? Dio() {
+  }) : _config = config,
+       _storage = storage,
+       _dio = dio ?? Dio() {
     _configureDio();
   }
 
@@ -49,7 +51,8 @@ class ApiClient {
               !options.headers.containsKey(HttpHeaders.authorizationHeader)) {
             final token = await _storage.getToken();
             if (token != null && token.isNotEmpty) {
-              options.headers[HttpHeaders.authorizationHeader] = 'Bearer $token';
+              options.headers[HttpHeaders.authorizationHeader] =
+                  'Bearer $token';
             }
           }
           return handler.next(options);
@@ -60,7 +63,8 @@ class ApiClient {
             final requestOptions = error.requestOptions;
 
             // Avoid infinite refresh loops if refresh endpoint itself failed with 401
-            final isRefreshRequest = requestOptions.path.contains(ApiEndpoints.refreshToken) ||
+            final isRefreshRequest =
+                requestOptions.path.contains(ApiEndpoints.refreshToken) ||
                 requestOptions.extra['isRetry'] == true ||
                 _isPublicAuthPath(requestOptions.path);
 
@@ -75,7 +79,8 @@ class ApiClient {
                       ..[HttpHeaders.authorizationHeader] = 'Bearer $newToken',
                     responseType: requestOptions.responseType,
                     contentType: requestOptions.contentType,
-                    extra: Map<String, dynamic>.from(requestOptions.extra)..['isRetry'] = true,
+                    extra: Map<String, dynamic>.from(requestOptions.extra)
+                      ..['isRetry'] = true,
                   );
 
                   final retryResponse = await _dio.request(
@@ -152,7 +157,9 @@ class ApiClient {
       );
 
       if (response.statusCode == 200 && response.data != null) {
-        final outerData = response.data is Map ? Map<String, dynamic>.from(response.data) : <String, dynamic>{};
+        final outerData = response.data is Map
+            ? Map<String, dynamic>.from(response.data)
+            : <String, dynamic>{};
         final data = outerData['data'] is Map
             ? Map<String, dynamic>.from(outerData['data'] as Map)
             : outerData;
@@ -160,14 +167,16 @@ class ApiClient {
             ? Map<String, dynamic>.from(data['tokens'] as Map)
             : data;
 
-        final newAccessToken = tokens['accessToken'] ??
+        final newAccessToken =
+            tokens['accessToken'] ??
             tokens['token'] ??
             tokens['access_token'] ??
             data['accessToken'] ??
             data['token'] ??
             outerData['accessToken'] ??
             outerData['token'];
-        final newRefreshToken = tokens['refreshToken'] ??
+        final newRefreshToken =
+            tokens['refreshToken'] ??
             tokens['refresh_token'] ??
             data['refreshToken'] ??
             data['refresh_token'] ??
@@ -176,7 +185,8 @@ class ApiClient {
 
         if (newAccessToken != null && newAccessToken.toString().isNotEmpty) {
           await _storage.saveToken(newAccessToken.toString());
-          if (newRefreshToken != null && newRefreshToken.toString().isNotEmpty) {
+          if (newRefreshToken != null &&
+              newRefreshToken.toString().isNotEmpty) {
             await _storage.saveRefreshToken(newRefreshToken.toString());
           }
           return true;
@@ -328,7 +338,8 @@ class ApiClient {
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
         return const NetworkException(
-          message: 'Connection timed out. Please check your network and try again.',
+          message:
+              'Connection timed out. Please check your network and try again.',
         );
 
       case DioExceptionType.connectionError:
@@ -339,25 +350,18 @@ class ApiClient {
       case DioExceptionType.badResponse:
         final response = error.response;
         if (response == null) {
-          return const ServerException(message: 'Unknown server error occurred.');
+          return const ServerException(
+            message: 'Unknown server error occurred.',
+          );
         }
 
         final statusCode = response.statusCode ?? 500;
         final responseData = response.data;
-        String message = 'An error occurred. Please try again.';
-        Map<String, dynamic>? errors;
-
-        if (responseData is Map) {
-          message = responseData['message']?.toString() ??
-              responseData['error']?.toString() ??
-              message;
-
-          if (responseData['errors'] is Map) {
-            errors = Map<String, dynamic>.from(responseData['errors']);
-          }
-        } else if (responseData is String && responseData.isNotEmpty) {
-          message = responseData;
-        }
+        final message = responseMessageFromError(
+          responseData,
+          'An error occurred. Please try again.',
+        );
+        final errors = validationErrorsFromResponse(responseData);
 
         if (statusCode == 401) {
           return UnauthorizedException(message: message);
@@ -388,7 +392,9 @@ class ApiClient {
         return const NetworkException(message: 'Request was cancelled.');
 
       case DioExceptionType.badCertificate:
-        return const NetworkException(message: 'Security certificate verification failed.');
+        return const NetworkException(
+          message: 'Security certificate verification failed.',
+        );
 
       case DioExceptionType.unknown:
       default:

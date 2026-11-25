@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:mobile/core/constants/api_endpoints.dart';
 import 'package:mobile/core/errors/exceptions.dart';
+
 import '../models/innings_model.dart';
 import '../models/match_model.dart';
 
@@ -27,7 +28,11 @@ abstract class MatchRemoteDataSource {
 
   Future<MatchModel> updateMatch(String id, Map<String, dynamic> data);
 
-  Future<MatchModel> recordToss(String matchId, String winnerTeamId, String decision);
+  Future<MatchModel> recordToss(
+    String matchId,
+    String winnerTeamId,
+    String decision,
+  );
 
   Future<InningsModel> getInnings(String matchId, int inningsNumber);
 
@@ -55,9 +60,11 @@ class MatchRemoteDataSourceImpl implements MatchRemoteDataSource {
       final queryParams = <String, dynamic>{
         'page': page,
         'limit': limit,
-        if (status != null && status.isNotEmpty && status != 'ALL') 'status': status,
-        if (tournamentId != null && tournamentId.isNotEmpty) 'tournament': tournamentId,
-        if (teamId != null && teamId.isNotEmpty) 'team': teamId,
+        if (status != null && status.isNotEmpty && status != 'ALL')
+          'status': status,
+        if (tournamentId != null && tournamentId.isNotEmpty)
+          'tournamentId': tournamentId,
+        if (teamId != null && teamId.isNotEmpty) 'teamId': teamId,
         if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
       };
 
@@ -112,8 +119,8 @@ class MatchRemoteDataSourceImpl implements MatchRemoteDataSource {
         final map = data['data'] is Map<String, dynamic>
             ? data['data'] as Map<String, dynamic>
             : (data['match'] is Map<String, dynamic>
-                ? data['match'] as Map<String, dynamic>
-                : data);
+                  ? data['match'] as Map<String, dynamic>
+                  : data);
         return MatchModel.fromJson(map);
       }
       throw const ServerException(message: 'Invalid match response format.');
@@ -125,18 +132,15 @@ class MatchRemoteDataSourceImpl implements MatchRemoteDataSource {
   @override
   Future<MatchModel> createMatch(Map<String, dynamic> data) async {
     try {
-      final response = await _dio.post(
-        ApiEndpoints.matches,
-        data: data,
-      );
+      final response = await _dio.post(ApiEndpoints.matches, data: data);
 
       final resData = response.data;
       if (resData is Map<String, dynamic>) {
         final map = resData['data'] is Map<String, dynamic>
             ? resData['data'] as Map<String, dynamic>
             : (resData['match'] is Map<String, dynamic>
-                ? resData['match'] as Map<String, dynamic>
-                : resData);
+                  ? resData['match'] as Map<String, dynamic>
+                  : resData);
         return MatchModel.fromJson(map);
       }
       throw const ServerException(message: 'Failed to create match fixture.');
@@ -148,18 +152,15 @@ class MatchRemoteDataSourceImpl implements MatchRemoteDataSource {
   @override
   Future<MatchModel> updateMatch(String id, Map<String, dynamic> data) async {
     try {
-      final response = await _dio.put(
-        ApiEndpoints.matchById(id),
-        data: data,
-      );
+      final response = await _dio.put(ApiEndpoints.matchById(id), data: data);
 
       final resData = response.data;
       if (resData is Map<String, dynamic>) {
         final map = resData['data'] is Map<String, dynamic>
             ? resData['data'] as Map<String, dynamic>
             : (resData['match'] is Map<String, dynamic>
-                ? resData['match'] as Map<String, dynamic>
-                : resData);
+                  ? resData['match'] as Map<String, dynamic>
+                  : resData);
         return MatchModel.fromJson(map);
       }
       throw const ServerException(message: 'Failed to update match.');
@@ -177,10 +178,7 @@ class MatchRemoteDataSourceImpl implements MatchRemoteDataSource {
     try {
       final response = await _dio.post(
         ApiEndpoints.matchToss(matchId),
-        data: {
-          'winner': winnerTeamId,
-          'decision': decision,
-        },
+        data: {'winner': winnerTeamId, 'decision': decision},
       );
 
       final resData = response.data;
@@ -188,8 +186,8 @@ class MatchRemoteDataSourceImpl implements MatchRemoteDataSource {
         final map = resData['data'] is Map<String, dynamic>
             ? resData['data'] as Map<String, dynamic>
             : (resData['match'] is Map<String, dynamic>
-                ? resData['match'] as Map<String, dynamic>
-                : resData);
+                  ? resData['match'] as Map<String, dynamic>
+                  : resData);
         return MatchModel.fromJson(map);
       }
       throw const ServerException(message: 'Failed to record toss decision.');
@@ -201,20 +199,25 @@ class MatchRemoteDataSourceImpl implements MatchRemoteDataSource {
   @override
   Future<InningsModel> getInnings(String matchId, int inningsNumber) async {
     try {
-      final response = await _dio.get(
-        '${ApiEndpoints.matchById(matchId)}/innings/$inningsNumber',
-      );
+      final scorecard = await getScorecard(matchId);
+      final data = scorecard['data'];
+      final inningsList = data is Map ? data['innings'] : scorecard['innings'];
 
-      final data = response.data;
-      if (data is Map<String, dynamic>) {
-        final map = data['data'] is Map<String, dynamic>
-            ? data['data'] as Map<String, dynamic>
-            : (data['innings'] is Map<String, dynamic>
-                ? data['innings'] as Map<String, dynamic>
-                : data);
-        return InningsModel.fromJson(map);
+      if (inningsList is List) {
+        for (final item in inningsList) {
+          if (item is! Map<String, dynamic>) continue;
+          final number =
+              item['inningsNumber'] ?? item['number'] ?? item['innings'];
+          if (number == inningsNumber ||
+              number?.toString() == inningsNumber.toString()) {
+            return InningsModel.fromJson(item);
+          }
+        }
       }
-      throw const ServerException(message: 'Failed to load innings.');
+
+      throw NotFoundException(
+        message: 'Innings $inningsNumber is not available yet.',
+      );
     } catch (e) {
       _handleError(e);
     }
@@ -236,7 +239,9 @@ class MatchRemoteDataSourceImpl implements MatchRemoteDataSource {
   @override
   Future<List<dynamic>> getCommentary(String matchId) async {
     try {
-      final response = await _dio.get(ApiEndpoints.commentaryByMatchId(matchId));
+      final response = await _dio.get(
+        ApiEndpoints.commentaryByMatchId(matchId),
+      );
       final data = response.data;
 
       if (data is Map<String, dynamic>) {
@@ -280,19 +285,11 @@ class MatchRemoteDataSourceImpl implements MatchRemoteDataSource {
       final statusCode = response?.statusCode ?? 500;
       final responseData = response?.data;
 
-      String message = 'An unexpected match service error occurred.';
-      Map<String, dynamic>? errors;
-
-      if (responseData is Map<String, dynamic>) {
-        message = responseData['message']?.toString() ??
-            responseData['error']?.toString() ??
-            message;
-        if (responseData['errors'] is Map) {
-          errors = Map<String, dynamic>.from(responseData['errors'] as Map);
-        }
-      } else if (responseData is String && responseData.isNotEmpty) {
-        message = responseData;
-      }
+      final message = responseMessageFromError(
+        responseData,
+        'An unexpected match service error occurred.',
+      );
+      final errors = validationErrorsFromResponse(responseData);
 
       if (statusCode == 401) {
         throw UnauthorizedException(message: message);

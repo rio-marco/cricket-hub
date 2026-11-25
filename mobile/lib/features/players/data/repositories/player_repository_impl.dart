@@ -45,9 +45,15 @@ class PlayerRepositoryImpl implements PlayerRepository {
   }
 
   @override
-  Future<Player?> getPlayerByUserId(String userId) async {
+  Future<Player?> getPlayerByUserId(
+    String userId, {
+    String? searchName,
+  }) async {
     try {
-      return await _remoteDataSource.getPlayerByUserId(userId);
+      return await _remoteDataSource.getPlayerByUserId(
+        userId,
+        searchName: searchName,
+      );
     } on AppException catch (e) {
       throw Failure.fromException(e);
     } catch (e) {

@@ -24,9 +24,10 @@ class FixtureCard extends StatelessWidget {
     final borderColor = isDark ? const Color(0xFF2E2E2E) : const Color(0xFFE8E8E8);
 
     // Parse fixture attributes
-    final id = fixture['id']?.toString() ?? fixture['_id']?.toString() ?? '';
-    final round = fixture['round']?.toString() ?? 'Match';
-    final matchNumber = fixture['matchNumber'] != null ? ' #${fixture['matchNumber']}' : '';
+    final matchNumber = fixture['matchNumber'];
+    final round = fixture['round']?.toString() ??
+        fixture['title']?.toString() ??
+        (matchNumber != null ? 'Match #$matchNumber' : 'Match');
     final status = (fixture['status']?.toString() ?? 'UPCOMING').toUpperCase();
 
     // Teams
@@ -107,7 +108,7 @@ class FixtureCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            '$round$matchNumber',
+                            round,
                             style: (isDark ? AppTextStyles.labelSmallDark : AppTextStyles.labelSmallLight)
                                 .copyWith(fontWeight: FontWeight.w700, fontSize: 11),
                           ),
@@ -333,6 +334,11 @@ class FixtureCard extends StatelessWidget {
         bg = AppColors.success.withOpacity(0.12);
         textColor = AppColors.success;
         label = 'RESULT';
+        break;
+      case 'TOSS':
+        bg = Colors.orange.withOpacity(0.15);
+        textColor = Colors.orange;
+        label = 'TOSS';
         break;
       case 'CANCELLED':
       case 'ABANDONED':

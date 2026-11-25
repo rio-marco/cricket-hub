@@ -20,11 +20,17 @@ abstract class TournamentRepository {
   /// Updates an existing tournament.
   Future<Tournament> updateTournament(String id, Map<String, dynamic> data);
 
+  Future<Tournament> updateTournamentStatus(String id, String status);
+
   /// Deletes a tournament.
   Future<void> deleteTournament(String id);
 
   /// Registers a team for a tournament.
   Future<TournamentTeam> registerTeam(String tournamentId, String teamId);
+
+  Future<TournamentTeam> approveTeam(String tournamentId, String tournamentTeamId);
+
+  Future<TournamentTeam> rejectTeam(String tournamentId, String tournamentTeamId);
 
   /// Fetches all registered teams in a tournament.
   Future<List<TournamentTeam>> getRegisteredTeams(String tournamentId);

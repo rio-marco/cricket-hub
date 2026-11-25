@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -23,6 +25,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
   bool _isSearchActive = false;
 
   final List<_TournamentTab> _tabs = const [
@@ -41,6 +44,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen>
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _searchController.dispose();
@@ -51,6 +55,13 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen>
     if (_tabController.indexIsChanging) return;
     final selectedTab = _tabs[_tabController.index];
     ref.read(tournamentsListProvider.notifier).setStatusFilter(selectedTab.status);
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+      ref.read(tournamentsListProvider.notifier).setSearchQuery(value.trim());
+    });
   }
 
   @override
@@ -82,6 +93,7 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen>
             onPressed: () {
               setState(() {
                 if (_isSearchActive) {
+                  _searchDebounce?.cancel();
                   _searchController.clear();
                   ref.read(tournamentsListProvider.notifier).clearSearch();
                   _isSearchActive = false;
@@ -162,15 +174,14 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen>
             ? IconButton(
                 icon: const Icon(Icons.clear_rounded, size: 18),
                 onPressed: () {
+                  _searchDebounce?.cancel();
                   _searchController.clear();
                   ref.read(tournamentsListProvider.notifier).clearSearch();
                 },
               )
             : null,
       ),
-      onChanged: (value) {
-        ref.read(tournamentsListProvider.notifier).setSearchQuery(value);
-      },
+      onChanged: _onSearchChanged,
     );
   }
 
@@ -210,8 +221,23 @@ class _TournamentsScreenState extends ConsumerState<TournamentsScreen>
 
     return ListView.builder(
       padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 88),
-      itemCount: state.tournaments.length,
+      itemCount: state.tournaments.length + (state.hasNextPage ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index == state.tournaments.length) {
+          if (state.isLoadingMore) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              ref.read(tournamentsListProvider.notifier).loadMore();
+            }
+          });
+          return const SizedBox(height: 24);
+        }
+
         final tournament = state.tournaments[index];
         return TournamentCard(
           tournament: tournament,

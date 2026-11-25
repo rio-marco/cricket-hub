@@ -22,12 +22,13 @@ import {
   tossSchema,
   playingXISchema,
   scorerSchema,
+  matchQuerySchema,
 } from '../validators/match.validator';
 
 const router = Router();
 
 // Public match query routes - literal routes declared before parameterized :id route
-router.get('/', getMatches);
+router.get('/', validate(matchQuerySchema, 'query'), getMatches);
 router.get('/live', getLiveMatches);
 router.get('/upcoming', getUpcomingMatches);
 router.get('/completed', getCompletedMatches);

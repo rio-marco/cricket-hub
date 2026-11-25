@@ -198,7 +198,15 @@ class TeamDetailLoading extends TeamDetailState {
 class TeamDetailLoaded extends TeamDetailState {
   final Team team;
   final List<TeamMember> members;
-  const TeamDetailLoaded({required this.team, this.members = const []});
+  final Map<String, dynamic> stats;
+  final List<dynamic> matches;
+
+  const TeamDetailLoaded({
+    required this.team,
+    this.members = const [],
+    this.stats = const {},
+    this.matches = const [],
+  });
 }
 
 class TeamDetailError extends TeamDetailState {
@@ -218,14 +226,18 @@ class TeamDetailNotifier extends StateNotifier<TeamDetailState> {
   Future<void> loadTeamDetail() async {
     state = const TeamDetailLoading();
     try {
-      final team = await _repository.getTeamById(_teamId);
-      List<TeamMember> members = [];
-      try {
-        members = await _repository.getTeamMembers(_teamId);
-      } catch (_) {
-        // Members might be empty or endpoint optional
-      }
-      state = TeamDetailLoaded(team: team, members: members);
+      final results = await Future.wait([
+        _repository.getTeamById(_teamId),
+        _repository.getTeamMembers(_teamId),
+        _repository.getTeamStats(_teamId),
+        _repository.getTeamMatches(_teamId),
+      ]);
+      state = TeamDetailLoaded(
+        team: results[0] as Team,
+        members: results[1] as List<TeamMember>,
+        stats: results[2] as Map<String, dynamic>,
+        matches: results[3] as List<dynamic>,
+      );
     } on Failure catch (f) {
       state = TeamDetailError(f.message);
     } catch (e) {
@@ -307,13 +319,19 @@ class InvitationsError extends InvitationsState {
 
 class UserInvitationsNotifier extends StateNotifier<InvitationsState> {
   final TeamRepository _repository;
+  final String? _userId;
 
-  UserInvitationsNotifier(this._repository)
+  UserInvitationsNotifier(this._repository, this._userId)
       : super(const InvitationsLoading()) {
     fetchInvitations();
   }
 
   Future<void> fetchInvitations() async {
+    final userId = _userId;
+    if (userId == null || userId.isEmpty) {
+      state = const InvitationsLoaded([]);
+      return;
+    }
     state = const InvitationsLoading();
     try {
       final invitations = await _repository.getUserInvitations();
@@ -339,7 +357,8 @@ class UserInvitationsNotifier extends StateNotifier<InvitationsState> {
 final userInvitationsProvider =
     StateNotifierProvider<UserInvitationsNotifier, InvitationsState>((ref) {
   final repo = ref.watch(teamRepositoryProvider);
-  return UserInvitationsNotifier(repo);
+  final user = ref.watch(currentUserProvider);
+  return UserInvitationsNotifier(repo, user?.id);
 });
 
 // =============================================================================
@@ -355,7 +374,7 @@ class CreateTeamNotifier extends StateNotifier<AsyncValue<Team?>> {
     required String name,
     String? description,
     String? location,
-    dynamic logoFile,
+    String? logo,
   }) async {
     state = const AsyncValue.loading();
     try {
@@ -363,7 +382,7 @@ class CreateTeamNotifier extends StateNotifier<AsyncValue<Team?>> {
         name: name,
         description: description,
         location: location,
-        logoFile: logoFile,
+        logo: logo,
       );
       state = AsyncValue.data(newTeam);
       return newTeam;

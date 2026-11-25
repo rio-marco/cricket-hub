@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile/core/api/api_client.dart';
 import 'package:mobile/core/errors/failures.dart';
+
 import '../../data/datasources/match_remote_datasource.dart';
 import '../../data/repositories/match_repository_impl.dart';
 import '../../domain/entities/innings.dart';
@@ -30,13 +31,16 @@ class MatchListState {
     List<Match>? matches,
     bool? isLoading,
     String? errorMessage,
+    bool clearErrorMessage = false,
     String? selectedTab,
     String? searchQuery,
   }) {
     return MatchListState(
       matches: matches ?? this.matches,
       isLoading: isLoading ?? this.isLoading,
-      errorMessage: errorMessage,
+      errorMessage: clearErrorMessage
+          ? null
+          : errorMessage ?? this.errorMessage,
       selectedTab: selectedTab ?? this.selectedTab,
       searchQuery: searchQuery ?? this.searchQuery,
     );
@@ -56,44 +60,22 @@ class MatchListNotifier extends StateNotifier<MatchListState> {
 
   /// Loads matches according to current tab (LIVE, UPCOMING, COMPLETED)
   Future<void> loadMatches({bool refresh = false}) async {
-    if (!refresh && state.matches.isNotEmpty && state.isLoading) return;
+    if (state.isLoading && !refresh) return;
 
-    state = state.copyWith(isLoading: true, errorMessage: null);
+    state = state.copyWith(isLoading: true, clearErrorMessage: true);
 
     try {
-      List<Match> results;
-      switch (state.selectedTab) {
-        case 'LIVE':
-          results = await _repository.getLiveMatches();
-          break;
-        case 'UPCOMING':
-          results = await _repository.getUpcomingMatches();
-          break;
-        case 'COMPLETED':
-          results = await _repository.getCompletedMatches();
-          break;
-        default:
-          results = await _repository.getMatches(
-            status: state.selectedTab == 'ALL' ? null : state.selectedTab,
-            search: state.searchQuery.isEmpty ? null : state.searchQuery,
-          );
-      }
-
-      // Filter by search query if present
-      if (state.searchQuery.trim().isNotEmpty) {
-        final q = state.searchQuery.toLowerCase();
-        results = results.where((m) {
-          return m.teamAName.toLowerCase().contains(q) ||
-              m.teamBName.toLowerCase().contains(q) ||
-              (m.venue != null && m.venue!.toLowerCase().contains(q)) ||
-              (m.tournamentName != null && m.tournamentName!.toLowerCase().contains(q));
-        }).toList();
-      }
+      final results = await _repository.getMatches(
+        status: state.selectedTab == 'ALL' ? null : state.selectedTab,
+        search: state.searchQuery.trim().isEmpty
+            ? null
+            : state.searchQuery.trim(),
+      );
 
       state = state.copyWith(
         matches: results,
         isLoading: false,
-        errorMessage: null,
+        clearErrorMessage: true,
       );
     } on Failure catch (f) {
       state = state.copyWith(isLoading: false, errorMessage: f.message);
@@ -154,7 +136,10 @@ class MatchActionNotifier extends StateNotifier<MatchActionState> {
       );
       return match;
     } on Failure catch (f) {
-      state = MatchActionState(isLoading: false, errorMessage: f.message);
+      final message = f is ValidationFailure
+          ? f.firstError ?? f.message
+          : f.message;
+      state = MatchActionState(isLoading: false, errorMessage: message);
       return null;
     } catch (e) {
       state = MatchActionState(isLoading: false, errorMessage: e.toString());
@@ -170,14 +155,21 @@ class MatchActionNotifier extends StateNotifier<MatchActionState> {
   }) async {
     state = const MatchActionState(isLoading: true);
     try {
-      final updated = await _repository.recordToss(matchId, winnerTeamId, decision);
+      final updated = await _repository.recordToss(
+        matchId,
+        winnerTeamId,
+        decision,
+      );
       state = const MatchActionState(
         isLoading: false,
         successMessage: 'Toss outcome recorded successfully!',
       );
       return updated;
     } on Failure catch (f) {
-      state = MatchActionState(isLoading: false, errorMessage: f.message);
+      final message = f is ValidationFailure
+          ? f.firstError ?? f.message
+          : f.message;
+      state = MatchActionState(isLoading: false, errorMessage: message);
       return null;
     } catch (e) {
       state = MatchActionState(isLoading: false, errorMessage: e.toString());
@@ -205,9 +197,9 @@ final matchRepositoryProvider = Provider<MatchRepository>((ref) {
 /// Main match list provider with tab control
 final matchesListProvider =
     StateNotifierProvider<MatchListNotifier, MatchListState>((ref) {
-  final repository = ref.watch(matchRepositoryProvider);
-  return MatchListNotifier(repository);
-});
+      final repository = ref.watch(matchRepositoryProvider);
+      return MatchListNotifier(repository);
+    });
 
 /// Live matches stream/polling provider
 final liveMatchesProvider = FutureProvider<List<Match>>((ref) async {
@@ -228,15 +220,19 @@ final completedMatchesProvider = FutureProvider<List<Match>>((ref) async {
 });
 
 /// Match detail provider by ID
-final matchDetailProvider =
-    FutureProvider.family<Match, String>((ref, id) async {
+final matchDetailProvider = FutureProvider.family<Match, String>((
+  ref,
+  id,
+) async {
   final repository = ref.watch(matchRepositoryProvider);
   return repository.getMatchById(id);
 });
 
 /// Innings scorecard provider
-final matchInningsProvider =
-    FutureProvider.family<Innings, (String, int)>((ref, args) async {
+final matchInningsProvider = FutureProvider.family<Innings, (String, int)>((
+  ref,
+  args,
+) async {
   final (matchId, inningsNum) = args;
   final repository = ref.watch(matchRepositoryProvider);
   return repository.getInnings(matchId, inningsNum);
@@ -245,13 +241,15 @@ final matchInningsProvider =
 /// Complete Scorecard provider
 final matchScorecardProvider =
     FutureProvider.family<Map<String, dynamic>, String>((ref, matchId) async {
-  final repository = ref.watch(matchRepositoryProvider);
-  return repository.getScorecard(matchId);
-});
+      final repository = ref.watch(matchRepositoryProvider);
+      return repository.getScorecard(matchId);
+    });
 
 /// Ball-by-ball commentary provider
-final matchCommentaryProvider =
-    FutureProvider.family<List<dynamic>, String>((ref, matchId) async {
+final matchCommentaryProvider = FutureProvider.family<List<dynamic>, String>((
+  ref,
+  matchId,
+) async {
   final repository = ref.watch(matchRepositoryProvider);
   return repository.getCommentary(matchId);
 });
@@ -259,6 +257,6 @@ final matchCommentaryProvider =
 /// Match action notifier provider
 final matchActionProvider =
     StateNotifierProvider<MatchActionNotifier, MatchActionState>((ref) {
-  final repository = ref.watch(matchRepositoryProvider);
-  return MatchActionNotifier(repository);
-});
+      final repository = ref.watch(matchRepositoryProvider);
+      return MatchActionNotifier(repository);
+    });

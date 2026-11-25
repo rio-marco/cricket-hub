@@ -160,9 +160,22 @@ export const updateTournamentStatusSchema = Joi.object({
     }),
 });
 
+export const tournamentQuerySchema = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(10),
+  sort: Joi.string().trim().max(100),
+  order: Joi.string().trim().valid('asc', 'desc'),
+  status: Joi.string().valid(...Object.values(TournamentStatus)),
+  city: Joi.string().trim().max(100),
+  format: Joi.string().valid(...Object.values(TournamentFormat)),
+  organizer: Joi.string().pattern(objectIdPattern),
+  search: Joi.string().trim().max(100).allow(''),
+});
+
 export default {
   createTournamentSchema,
   updateTournamentSchema,
   registerTeamSchema,
   updateTournamentStatusSchema,
+  tournamentQuerySchema,
 };

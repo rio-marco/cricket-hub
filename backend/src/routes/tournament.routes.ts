@@ -22,12 +22,13 @@ import {
   updateTournamentSchema,
   registerTeamSchema,
   updateTournamentStatusSchema,
+  tournamentQuerySchema,
 } from '../validators/tournament.validator';
 
 const router = Router();
 
 // Public tournament routes
-router.get('/', getTournaments);
+router.get('/', validate(tournamentQuerySchema, 'query'), getTournaments);
 router.get('/:id', getTournamentById);
 router.get('/:id/teams', getRegisteredTeams);
 router.get('/:id/fixtures', getFixtures);

@@ -18,7 +18,7 @@ abstract class TeamRepository {
     required String name,
     String? description,
     String? location,
-    dynamic logoFile,
+    String? logo,
   });
 
   Future<Team> updateTeam(String id, Map<String, dynamic> data);
@@ -42,4 +42,8 @@ abstract class TeamRepository {
   Future<void> removePlayer(String teamId, String playerId);
 
   Future<void> updateMemberRole(String teamId, String memberId, String role);
+
+  Future<Map<String, dynamic>> getTeamStats(String teamId);
+
+  Future<List<dynamic>> getTeamMatches(String teamId);
 }

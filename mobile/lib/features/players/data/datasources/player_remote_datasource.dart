@@ -16,7 +16,7 @@ abstract class PlayerRemoteDataSource {
 
   Future<Player> getPlayerById(String id);
 
-  Future<Player?> getPlayerByUserId(String userId);
+  Future<Player?> getPlayerByUserId(String userId, {String? searchName});
 
   Future<Player> createPlayer(Map<String, dynamic> data);
 
@@ -46,11 +46,9 @@ class PlayerRemoteDataSourceImpl implements PlayerRemoteDataSource {
         'limit': limit,
       };
       if (search != null && search.trim().isNotEmpty) {
-        queryParams['q'] = search.trim();
         queryParams['search'] = search.trim();
       }
       if (role != null && role.isNotEmpty && role != 'ALL') {
-        queryParams['role'] = role;
         queryParams['playingRole'] = role;
       }
 
@@ -63,11 +61,11 @@ class PlayerRemoteDataSourceImpl implements PlayerRemoteDataSource {
       if (data is Map<String, dynamic>) {
         return PaginatedResponse<Player>.fromJson(
           data,
-          (item) => PlayerModel.fromJson(item as Map<String, dynamic>),
+          (item) => PlayerModel.fromJson(Map<String, dynamic>.from(item as Map)),
         );
       } else if (data is List) {
         final players = data
-            .map((e) => PlayerModel.fromJson(e as Map<String, dynamic>))
+            .map((e) => PlayerModel.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList();
         return PaginatedResponse<Player>(
           items: players,
@@ -102,24 +100,40 @@ class PlayerRemoteDataSourceImpl implements PlayerRemoteDataSource {
   }
 
   @override
-  Future<Player?> getPlayerByUserId(String userId) async {
+  Future<Player?> getPlayerByUserId(
+    String userId, {
+    String? searchName,
+  }) async {
     try {
-      final response = await _dio.get(
-        ApiEndpoints.players,
-        queryParameters: {'user': userId},
-      );
-      final data = response.data;
-      if (data is Map<String, dynamic>) {
-        final list = data['data'] ?? data['players'];
-        if (list is List && list.isNotEmpty) {
-          return PlayerModel.fromJson(list.first as Map<String, dynamic>);
+      const pageSize = 100;
+      for (var page = 1; page <= 10; page++) {
+        final response = await _dio.get(
+          ApiEndpoints.players,
+          queryParameters: {
+            'page': page,
+            'limit': pageSize,
+            if (searchName != null && searchName.trim().isNotEmpty)
+              'search': searchName.trim(),
+          },
+        );
+
+        final data = response.data;
+        if (data is! Map<String, dynamic>) break;
+
+        final paginated = PaginatedResponse<Player>.fromJson(
+          data,
+          (item) => PlayerModel.fromJson(Map<String, dynamic>.from(item as Map)),
+        );
+
+        for (final player in paginated.items) {
+          if (player.user == userId) return player;
         }
-      } else if (data is List && data.isNotEmpty) {
-        return PlayerModel.fromJson(data.first as Map<String, dynamic>);
+
+        if (!paginated.hasNextPage) break;
       }
       return null;
-    } catch (_) {
-      return null;
+    } catch (e) {
+      _handleError(e);
     }
   }
 
@@ -215,6 +229,15 @@ class PlayerRemoteDataSourceImpl implements PlayerRemoteDataSource {
             message;
         if (responseData['errors'] is Map) {
           errors = Map<String, dynamic>.from(responseData['errors'] as Map);
+        } else if (responseData['errors'] is List) {
+          final mapped = <String, dynamic>{};
+          for (final item in responseData['errors'] as List) {
+            if (item is Map) {
+              mapped[item['field']?.toString() ?? 'general'] =
+                  item['message']?.toString() ?? 'Invalid value';
+            }
+          }
+          if (mapped.isNotEmpty) errors = mapped;
         }
       } else if (responseData is String && responseData.isNotEmpty) {
         message = responseData;

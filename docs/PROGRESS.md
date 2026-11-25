@@ -117,26 +117,95 @@
 - [x] `flutter analyze` has no errors (remaining lints/deprecation notices only)
 - [x] `flutter test` passed: 6 tests
 
-## PHASE 5: TEAM & PLAYER MANAGEMENT 🔄
-- [ ] Backend: Team CRUD service/controller/routes
-- [ ] Backend: Player CRUD service/controller/routes
-- [ ] Backend: TeamMember management APIs
-- [ ] Backend: TeamInvitation APIs
-- [ ] Backend: Validators for team/player
-- [ ] Flutter: Teams feature (screens, providers, repos)
-- [ ] Flutter: Players feature (screens, providers, repos)
-- [ ] Flutter: Home dashboard screen
+## PHASE 5: TEAM, PLAYER & DASHBOARD INTEGRATION ✅
+### Backend
+- [x] Team CRUD, member management, invitation, stats, and match APIs verified against clients
+- [x] Player CRUD, search, stats, teams, and match APIs verified against clients
+- [x] Team/player Joi query and body validation aligned with Flutter requests
+- [x] Fixed Express 5 read-only `req.query` handling in `validate.middleware.ts`
+- [x] Added middleware, player validator, player controller, and team controller tests
+
+### Flutter
+- [x] Replaced dashboard mock data with real match/team/player/tournament API aggregation
+- [x] Dashboard match parser handles populated teams, innings scores, results, and date fallback
+- [x] Team endpoints corrected for invitations, role updates, stats, and matches
+- [x] Team create uses JSON logo URL instead of unsupported multipart upload
+- [x] Team detail renders real stats and match history
+- [x] Team and player lists support pagination load-more
+- [x] Player search uses `search`/`playingRole`; profile lookup verifies `user` across paginated results
+- [x] Player detail merges nested career stats from `/players/:id/stats`
+- [x] Player create/update payloads no longer send unsupported `user`/`name`
+- [x] Added dashboard, team, and player parsing tests
+
+### Tests
+- [x] `npm run lint` passed
+- [x] `npm test` passed: 6 suites, 20 tests
+- [x] `flutter analyze` has no errors (remaining lints/deprecation notices only)
+- [x] `flutter test` passed: 12 tests
+
+## PHASE 6: TOURNAMENT MANAGEMENT ✅
+### Backend
+- [x] Added tournament list query validation for paging, sorting, status, city, format, organizer, and search
+- [x] Registered tournament query validation on `GET /api/v1/tournaments`
+- [x] Escaped regex inputs used by tournament city and search filters
+- [x] Added tournament create, status, registration, and query validator tests
+
+### Flutter
+- [x] Replaced tournament mock/fallback data with real backend API calls
+- [x] Corrected tournament management endpoint constants and fixture generation URL
+- [x] Added tournament status updates, team approval/rejection, and draft deletion actions
+- [x] Changed team registration to use real team IDs from `myTeamsProvider`
+- [x] Aligned create payload with backend lifecycle by setting `REGISTRATION_OPEN` after create
+- [x] Added tournament list search, status filtering, and pagination load-more
+- [x] Parsed backend team counts and standings rank instead of deriving them locally
+- [x] Parsed backend fixture titles, match numbers, and toss status
+- [x] Added tournament endpoint, team count, and standings rank parsing tests
+
+### Tests
+- [x] `npm run lint` passed
+- [x] `npm test` passed: 7 suites, 24 tests
+- [x] `flutter analyze` has no errors (remaining lints/deprecation notices only)
+- [x] `flutter test` passed: 15 tests
+
+## PHASE 7: MATCH CREATION & TOSS ✅
+### Backend
+- [x] Added match list query validation for paging, sorting, status, format, tournament, team, city, and search
+- [x] Registered match query validation on `GET /api/v1/matches`
+- [x] Escaped regex inputs used by match city and search filters
+- [x] Rejected duplicate team ObjectIds case-insensitively during match creation
+- [x] Blocked match creation for draft, completed, and cancelled tournaments
+- [x] Guarded null tournament organizer and team owner references in permission checks
+- [x] Blocked toss updates after the toss stage and normalized winner comparison with ObjectIds
+- [x] Blocked starting cancelled matches
+- [x] Added match create, toss, and list query validator tests
+
+### Flutter
+- [x] Removed all match mock/fallback data from the repository
+- [x] Replaced synthetic team names and IDs with real team selection from `myTeamsProvider`
+- [x] Changed create payloads to send `teamA`/`teamB` ObjectIds and optional `tournamentId`
+- [x] Removed unsupported `status` and `currentInnings` fields from create payloads
+- [x] Changed toss to send the selected team ID as `winner`
+- [x] Exposed team and tournament IDs from populated backend match payloads
+- [x] Mapped backend `error` arrays to `ValidationException`
+- [x] Removed the nonexistent innings endpoint by deriving innings from the scorecard response
+- [x] Switched match list loading to backend status/search filters
+- [x] Fixed match list error state clearing and action validation error messages
+- [x] Added match endpoint, team ID, and validation error parsing tests
+
+### Tests
+- [x] `npm run lint` passed
+- [x] `npm test` passed: 8 suites, 28 tests
+- [x] `flutter analyze` has no errors (remaining lints/deprecation notices only)
+- [x] `flutter test` passed: 18 tests
 
 ## Current Status
 - Backend authentication hardened and covered by isolated unit tests
 - Flutter auth/session flow aligned with backend payloads and Riverpod 2
+- Backend query validation works under Express 5
+- Dashboard, Teams, Players, Tournaments, and Matches use real backend APIs with no mock data
 - Backend: TypeScript compilation passes with 0 errors
 - Flutter: analyzer passes with 0 errors; remaining notices are lints/deprecations
-- Phases 1-4 and Phase 4A complete
-- Phase 5 in progress
+- Phases 1-7 complete
 
 ## Next Steps
-- Complete Phase 5: Team & Player Management
-- Phase 6: Tournament Management
-- Phase 7: Match Creation & Toss
 - Run MongoDB integration verification before production deployment

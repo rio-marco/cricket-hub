@@ -8,6 +8,7 @@ import 'package:mobile/core/widgets/app_card.dart';
 import 'package:mobile/core/widgets/empty_state_widget.dart';
 import 'package:mobile/core/widgets/error_widget.dart';
 import 'package:mobile/core/widgets/loading_widget.dart';
+import '../../../teams/presentation/providers/team_provider.dart';
 import '../../domain/entities/tournament.dart';
 import '../../domain/entities/tournament_team.dart';
 import '../providers/tournament_provider.dart';
@@ -46,8 +47,9 @@ class _TournamentDetailScreenState extends ConsumerState<TournamentDetailScreen>
   }
 
   void _showRegisterTeamDialog(BuildContext context, Tournament tournament) {
-    final teamNameController = TextEditingController();
-    final teamShortNameController = TextEditingController();
+    String? selectedTeamId;
+    final teamsState = ref.read(myTeamsProvider);
+    final teams = teamsState is TeamListLoaded ? teamsState.teams : <dynamic>[];
 
     showModalBottomSheet(
       context: context,
@@ -55,154 +57,163 @@ class _TournamentDetailScreenState extends ConsumerState<TournamentDetailScreen>
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         final isDark = Theme.of(ctx).brightness == Brightness.dark;
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          ),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF444444) : const Color(0xFFDDDDDD),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                 ),
-                const SizedBox(height: 18),
-                Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF444444) : const Color(0xFFDDDDDD),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.group_add_rounded, color: AppColors.primary),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Register Your Team',
+                                style: (isDark
+                                        ? AppTextStyles.titleMediumDark
+                                        : AppTextStyles.titleMediumLight)
+                                    .copyWith(fontWeight: FontWeight.w700),
+                              ),
+                              Text(
+                                tournament.name,
+                                style: (isDark
+                                        ? AppTextStyles.bodySmallDark
+                                        : AppTextStyles.bodySmallLight)
+                                    .copyWith(
+                                  color: isDark
+                                      ? AppColors.textSecondaryDark
+                                      : AppColors.textSecondaryLight,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    if (teamsState is TeamListError)
+                      Text(
+                        teamsState.message,
+                        style: const TextStyle(color: AppColors.error),
+                      )
+                    else if (teams.isEmpty)
+                      const Text(
+                        'Create a team from the Teams tab before registering for a tournament.',
+                      )
+                    else
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedTeamId,
+                        decoration: InputDecoration(
+                          labelText: 'Select Team',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          prefixIcon: const Icon(Icons.shield_outlined),
+                        ),
+                        items: teams.map((team) {
+                          return DropdownMenuItem<String>(
+                            value: team.id.toString(),
+                            child: Text(team.name.toString()),
+                          );
+                        }).toList(),
+                        onChanged: (value) => setSheetState(() => selectedTeamId = value),
+                      ),
+                    const SizedBox(height: 14),
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.12),
+                        color: AppColors.primary.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.group_add_rounded, color: AppColors.primary),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Register Your Team',
-                            style: (isDark
-                                    ? AppTextStyles.titleMediumDark
-                                    : AppTextStyles.titleMediumLight)
-                                .copyWith(fontWeight: FontWeight.w700),
+                          const Text(
+                            'Entry Registration Fee:',
+                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                           ),
                           Text(
-                            tournament.name,
-                            style: (isDark
-                                    ? AppTextStyles.bodySmallDark
-                                    : AppTextStyles.bodySmallLight)
-                                .copyWith(
-                              color: isDark
-                                  ? AppColors.textSecondaryDark
-                                  : AppColors.textSecondaryLight,
+                            tournament.registrationFee > 0
+                                ? '₹${tournament.registrationFee.toInt()}'
+                                : 'FREE ENTRY',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
+                    const SizedBox(height: 20),
+                    AppButton(
+                      text: 'Submit Enrollment',
+                      icon: Icons.check_circle_rounded,
+                      onPressed: selectedTeamId == null
+                          ? null
+                          : () async {
+                              final teamId = selectedTeamId!;
+                              final messenger = ScaffoldMessenger.of(context);
+                              Navigator.pop(ctx);
+                              final success = await ref
+                                  .read(tournamentActionProvider.notifier)
+                                  .registerTeam(widget.tournamentId, teamId);
+
+                              if (mounted) {
+                                final error = ref.read(tournamentActionProvider).errorMessage;
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      success
+                                          ? 'Team enrollment request submitted successfully!'
+                                          : error ?? 'Failed to register team.',
+                                    ),
+                                    backgroundColor:
+                                        success ? AppColors.success : AppColors.error,
+                                  ),
+                                );
+                                ref.invalidate(tournamentTeamsProvider(widget.tournamentId));
+                                ref.invalidate(tournamentDetailProvider(widget.tournamentId));
+                              }
+                            },
+                    ),
                   ],
                 ),
-                const SizedBox(height: 20),
-
-                TextField(
-                  controller: teamNameController,
-                  decoration: InputDecoration(
-                    labelText: 'Team Name *',
-                    hintText: 'e.g. Royal Challengers Mumbai',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    prefixIcon: const Icon(Icons.shield_outlined),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                TextField(
-                  controller: teamShortNameController,
-                  decoration: InputDecoration(
-                    labelText: 'Short Name / Code *',
-                    hintText: 'e.g. RCM',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    prefixIcon: const Icon(Icons.badge_outlined),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Entry Registration Fee:',
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                      ),
-                      Text(
-                        tournament.registrationFee > 0
-                            ? '₹${tournament.registrationFee.toInt()}'
-                            : 'FREE ENTRY',
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                AppButton(
-                  text: 'Submit Enrollment',
-                  icon: Icons.check_circle_rounded,
-                  onPressed: () async {
-                    if (teamNameController.text.trim().isEmpty) return;
-                    Navigator.pop(ctx);
-
-                    final teamId = 'team_${DateTime.now().millisecondsSinceEpoch}';
-                    final success = await ref
-                        .read(tournamentActionProvider.notifier)
-                        .registerTeam(widget.tournamentId, teamId);
-
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            success
-                                ? 'Team enrollment request submitted successfully!'
-                                : 'Failed to register team.',
-                          ),
-                          backgroundColor:
-                              success ? AppColors.success : AppColors.error,
-                        ),
-                      );
-                      ref.invalidate(tournamentTeamsProvider(widget.tournamentId));
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -214,18 +225,208 @@ class _TournamentDetailScreenState extends ConsumerState<TournamentDetailScreen>
         .generateFixtures(widget.tournamentId);
 
     if (mounted) {
+      final error = ref.read(tournamentActionProvider).errorMessage;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             success
                 ? 'Match schedule fixtures generated successfully!'
-                : 'Failed to generate fixtures.',
+                : error ?? 'Failed to generate fixtures.',
           ),
           backgroundColor: success ? AppColors.success : AppColors.error,
         ),
       );
       ref.invalidate(tournamentFixturesProvider(widget.tournamentId));
     }
+  }
+
+  Future<void> _updateStatus(String status) async {
+    final success = await ref
+        .read(tournamentActionProvider.notifier)
+        .updateStatus(widget.tournamentId, status);
+
+    if (mounted) {
+      final actionState = ref.read(tournamentActionProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? actionState.successMessage ?? 'Tournament status updated.'
+                : actionState.errorMessage ?? 'Failed to update status.',
+          ),
+          backgroundColor: success ? AppColors.success : AppColors.error,
+        ),
+      );
+      if (success) {
+        ref.invalidate(tournamentDetailProvider(widget.tournamentId));
+        ref.read(tournamentsListProvider.notifier).loadTournaments(refresh: true);
+      }
+    }
+  }
+
+  Future<void> _approveTeam(TournamentTeam team) async {
+    final success = await ref
+        .read(tournamentActionProvider.notifier)
+        .approveTeam(widget.tournamentId, team.id);
+
+    if (mounted) {
+      final actionState = ref.read(tournamentActionProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? actionState.successMessage ?? 'Team approved.'
+                : actionState.errorMessage ?? 'Failed to approve team.',
+          ),
+          backgroundColor: success ? AppColors.success : AppColors.error,
+        ),
+      );
+      if (success) {
+        ref.invalidate(tournamentTeamsProvider(widget.tournamentId));
+        ref.invalidate(tournamentDetailProvider(widget.tournamentId));
+      }
+    }
+  }
+
+  Future<void> _rejectTeam(TournamentTeam team) async {
+    final success = await ref
+        .read(tournamentActionProvider.notifier)
+        .rejectTeam(widget.tournamentId, team.id);
+
+    if (mounted) {
+      final actionState = ref.read(tournamentActionProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? actionState.successMessage ?? 'Team rejected.'
+                : actionState.errorMessage ?? 'Failed to reject team.',
+          ),
+          backgroundColor: success ? AppColors.success : AppColors.error,
+        ),
+      );
+      if (success) ref.invalidate(tournamentTeamsProvider(widget.tournamentId));
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete tournament?'),
+        content: const Text('This can only be done while the tournament is a draft.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final success = await ref
+        .read(tournamentActionProvider.notifier)
+        .deleteTournament(widget.tournamentId);
+
+    if (mounted) {
+      final actionState = ref.read(tournamentActionProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? actionState.successMessage ?? 'Tournament deleted.'
+                : actionState.errorMessage ?? 'Failed to delete tournament.',
+          ),
+          backgroundColor: success ? AppColors.success : AppColors.error,
+        ),
+      );
+      if (success) {
+        ref.read(tournamentsListProvider.notifier).loadTournaments(refresh: true);
+        context.pop();
+      }
+    }
+  }
+
+  PopupMenuButton<String> _buildManagementMenu(Tournament tournament) {
+    return PopupMenuButton<String>(
+      color: Theme.of(context).colorScheme.surface,
+      icon: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.4),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 20),
+      ),
+      onSelected: (value) {
+        if (value == 'delete') {
+          _confirmDelete();
+        } else {
+          _updateStatus(value);
+        }
+      },
+      itemBuilder: (ctx) {
+        final items = <PopupMenuEntry<String>>[];
+        switch (tournament.status) {
+          case 'DRAFT':
+            items.add(
+              const PopupMenuItem(
+                value: 'REGISTRATION_OPEN',
+                child: Text('Open registration'),
+              ),
+            );
+            items.add(
+              const PopupMenuItem(value: 'CANCELLED', child: Text('Cancel tournament')),
+            );
+            items.add(
+              const PopupMenuItem(value: 'delete', child: Text('Delete draft')),
+            );
+            break;
+          case 'REGISTRATION_OPEN':
+            items.add(
+              const PopupMenuItem(
+                value: 'REGISTRATION_CLOSED',
+                child: Text('Close registration'),
+              ),
+            );
+            items.add(
+              const PopupMenuItem(value: 'DRAFT', child: Text('Back to draft')),
+            );
+            items.add(
+              const PopupMenuItem(value: 'CANCELLED', child: Text('Cancel tournament')),
+            );
+            break;
+          case 'REGISTRATION_CLOSED':
+            items.add(
+              const PopupMenuItem(value: 'IN_PROGRESS', child: Text('Start tournament')),
+            );
+            items.add(
+              const PopupMenuItem(
+                value: 'REGISTRATION_OPEN',
+                child: Text('Reopen registration'),
+              ),
+            );
+            items.add(
+              const PopupMenuItem(value: 'CANCELLED', child: Text('Cancel tournament')),
+            );
+            break;
+          case 'IN_PROGRESS':
+            items.add(
+              const PopupMenuItem(value: 'COMPLETED', child: Text('Complete tournament')),
+            );
+            items.add(
+              const PopupMenuItem(value: 'CANCELLED', child: Text('Cancel tournament')),
+            );
+            break;
+        }
+        return items;
+      },
+    );
   }
 
   @override
@@ -347,6 +548,7 @@ class _TournamentDetailScreenState extends ConsumerState<TournamentDetailScreen>
             );
           },
         ),
+        _buildManagementMenu(tournament),
         const SizedBox(width: 8),
       ],
       flexibleSpace: FlexibleSpaceBar(
@@ -712,20 +914,49 @@ class _TournamentDetailScreenState extends ConsumerState<TournamentDetailScreen>
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              team.status,
-              style: const TextStyle(
-                color: AppColors.success,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: team.status == 'APPROVED'
+                      ? AppColors.success.withOpacity(0.12)
+                      : (team.status == 'REJECTED'
+                          ? AppColors.error.withOpacity(0.12)
+                          : AppColors.warning.withOpacity(0.12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  team.status,
+                  style: TextStyle(
+                    color: team.status == 'APPROVED'
+                        ? AppColors.success
+                        : (team.status == 'REJECTED' ? AppColors.error : AppColors.warning),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
+              if (team.status == 'PENDING') ...[
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.check_circle_outline, size: 18, color: AppColors.success),
+                      tooltip: 'Approve',
+                      onPressed: () => _approveTeam(team),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.cancel_outlined, size: 18, color: AppColors.error),
+                      tooltip: 'Reject',
+                      onPressed: () => _rejectTeam(team),
+                    ),
+                  ],
+                ),
+              ],
+            ],
           ),
         ],
       ),

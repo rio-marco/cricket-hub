@@ -15,25 +15,32 @@ class ApiEndpoints {
   static const String logout = '/auth/logout';
   static const String me = '/auth/me';
   static const String profile = '/auth/profile';
+  static const String changePassword = '/auth/change-password';
   static const String avatar = '/auth/avatar';
 
   // ---------------------------------------------------------------------------
   // Users
   // ---------------------------------------------------------------------------
   static const String users = '/users';
+  static const String dashboardStats = '/users/dashboard/stats';
   static String userById(String id) => '/users/$id';
-  static String userSearch(String query) => '/users/search?q=$query';
 
   // ---------------------------------------------------------------------------
   // Teams
   // ---------------------------------------------------------------------------
   static const String teams = '/teams';
+  static const String userInvitations = '/teams/user/invitations';
   static String teamById(String id) => '/teams/$id';
   static String teamMembers(String id) => '/teams/$id/members';
   static String teamMemberById(String teamId, String memberId) =>
       '/teams/$teamId/members/$memberId';
+  static String teamMemberRole(String teamId, String memberId) =>
+      '/teams/$teamId/members/$memberId/role';
   static String teamInvite(String id) => '/teams/$id/invite';
   static String teamJoin(String id) => '/teams/$id/join';
+  static String teamInvitations(String id) => '/teams/$id/invitations';
+  static String respondToInvitation(String invitationId) =>
+      '/teams/invitations/$invitationId';
   static String teamStats(String id) => '/teams/$id/stats';
   static String teamMatches(String id) => '/teams/$id/matches';
 
@@ -43,15 +50,20 @@ class ApiEndpoints {
   static const String players = '/players';
   static String playerById(String id) => '/players/$id';
   static String playerStats(String id) => '/players/$id/stats';
+  static String playerTeams(String id) => '/players/$id/teams';
   static String playerMatches(String id) => '/players/$id/matches';
-  static String playerSearch(String query) => '/players/search?q=$query';
 
   // ---------------------------------------------------------------------------
   // Tournaments
   // ---------------------------------------------------------------------------
   static const String tournaments = '/tournaments';
   static String tournamentById(String id) => '/tournaments/$id';
+  static String tournamentStatus(String id) => '/tournaments/$id/status';
   static String tournamentTeams(String id) => '/tournaments/$id/teams';
+  static String tournamentTeamApprove(String tournamentId, String tournamentTeamId) =>
+      '/tournaments/$tournamentId/teams/$tournamentTeamId/approve';
+  static String tournamentTeamReject(String tournamentId, String tournamentTeamId) =>
+      '/tournaments/$tournamentId/teams/$tournamentTeamId/reject';
   static String tournamentFixtures(String id) => '/tournaments/$id/fixtures';
   static String tournamentStandings(String id) => '/tournaments/$id/standings';
   static String tournamentStats(String id) => '/tournaments/$id/stats';
@@ -64,10 +76,11 @@ class ApiEndpoints {
   static const String upcomingMatches = '/matches/upcoming';
   static const String completedMatches = '/matches/completed';
   static String matchById(String id) => '/matches/$id';
+  static String matchScorecard(String id) => '/matches/$id/scorecard';
   static String matchToss(String id) => '/matches/$id/toss';
   static String matchPlayingXi(String id) => '/matches/$id/playing-xi';
+  static String matchScorer(String id) => '/matches/$id/scorer';
   static String matchStart(String id) => '/matches/$id/start';
-  static String matchEnd(String id) => '/matches/$id/end';
 
   // ---------------------------------------------------------------------------
   // Scoring
@@ -85,12 +98,9 @@ class ApiEndpoints {
   // ---------------------------------------------------------------------------
   // Scorecards
   // ---------------------------------------------------------------------------
-  static const String scorecards = '/scorecards';
-  static String scorecardByMatchId(String matchId) => '/scorecards/$matchId';
-  static String commentaryByMatchId(String matchId) =>
-      '/scorecards/$matchId/commentary';
-  static String matchHighlights(String matchId) =>
-      '/scorecards/$matchId/highlights';
+  static String scorecardByMatchId(String matchId) => matchScorecard(matchId);
+  static String commentaryByMatchId(String matchId) => matchScorecard(matchId);
+  static String matchHighlights(String matchId) => matchScorecard(matchId);
 
   // ---------------------------------------------------------------------------
   // Statistics

@@ -52,14 +52,7 @@ class PointsTableWidget extends StatelessWidget {
       );
     }
 
-    // Sort teams by points (descending), then netRunRate (descending)
-    final sortedTeams = List<TournamentTeam>.from(teams)
-      ..sort((a, b) {
-        if (b.points != a.points) {
-          return b.points.compareTo(a.points);
-        }
-        return b.netRunRate.compareTo(a.netRunRate);
-      });
+    final sortedTeams = teams;
 
     final tableBg = isDark ? AppColors.cardDark : AppColors.cardLight;
     final borderColor = isDark ? const Color(0xFF2E2E2E) : const Color(0xFFE8E8E8);
@@ -104,7 +97,7 @@ class PointsTableWidget extends StatelessWidget {
             },
             itemBuilder: (context, index) {
               final team = sortedTeams[index];
-              final rank = index + 1;
+              final rank = team.rank > 0 ? team.rank : index + 1;
               return _buildTableRow(context, team, rank, isDark, index % 2 == 1);
             },
           ),

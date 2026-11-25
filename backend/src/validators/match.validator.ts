@@ -1,6 +1,7 @@
 import Joi from 'joi';
 import {
   MatchFormat,
+  MatchStatus,
   BallType,
   TossDecision,
 } from '../constants/enums';
@@ -155,10 +156,33 @@ export const scorerSchema = Joi.object({
   }),
 });
 
+export const matchQuerySchema = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(10),
+  sort: Joi.string().valid(
+    'matchDate',
+    'title',
+    'status',
+    'city',
+    'format',
+    'createdAt',
+  ),
+  order: Joi.string().trim().valid('asc', 'desc'),
+  status: Joi.string().valid(...Object.values(MatchStatus)),
+  format: Joi.string().valid(...Object.values(MatchFormat)),
+  tournamentId: Joi.string().pattern(objectIdPattern),
+  tournament: Joi.string().pattern(objectIdPattern),
+  teamId: Joi.string().pattern(objectIdPattern),
+  team: Joi.string().pattern(objectIdPattern),
+  city: Joi.string().trim().max(100),
+  search: Joi.string().trim().max(100).allow(''),
+});
+
 export default {
   createMatchSchema,
   updateMatchSchema,
   tossSchema,
   playingXISchema,
   scorerSchema,
+  matchQuerySchema,
 };

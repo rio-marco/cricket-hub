@@ -16,7 +16,9 @@ class TossInfo {
 
   Map<String, dynamic> toJson() {
     return {
-      'winner': winner is Map ? (winner as Map)['id'] ?? (winner as Map)['_id'] : winner,
+      'winner': winner is Map
+          ? (winner as Map)['id'] ?? (winner as Map)['_id']
+          : winner,
       'decision': decision,
     };
   }
@@ -60,7 +62,9 @@ class MatchResultInfo {
 
   Map<String, dynamic> toJson() {
     return {
-      'winner': winner is Map ? (winner as Map)['id'] ?? (winner as Map)['_id'] : winner,
+      'winner': winner is Map
+          ? (winner as Map)['id'] ?? (winner as Map)['_id']
+          : winner,
       if (resultType != null) 'resultType': resultType,
       if (margin != null) 'margin': margin,
       if (description != null) 'description': description,
@@ -136,7 +140,9 @@ class Match {
 
     MatchResultInfo? resultInfo;
     if (json['result'] is Map<String, dynamic>) {
-      resultInfo = MatchResultInfo.fromJson(json['result'] as Map<String, dynamic>);
+      resultInfo = MatchResultInfo.fromJson(
+        json['result'] as Map<String, dynamic>,
+      );
     }
 
     return Match(
@@ -146,7 +152,9 @@ class Match {
       teamA: json['teamA'],
       teamB: json['teamB'],
       format: (json['format'] as String? ?? 'T20').toUpperCase(),
-      totalOvers: json['totalOvers'] is num ? (json['totalOvers'] as num).toInt() : 20,
+      totalOvers: json['totalOvers'] is num
+          ? (json['totalOvers'] as num).toInt()
+          : 20,
       ballType: json['ballType']?.toString().toUpperCase(),
       venue: json['venue'] as String?,
       city: json['city'] as String?,
@@ -156,7 +164,9 @@ class Match {
       status: (json['status'] as String? ?? 'UPCOMING').toUpperCase(),
       result: resultInfo,
       playerOfMatch: json['playerOfMatch'],
-      currentInnings: json['currentInnings'] is num ? (json['currentInnings'] as num).toInt() : 1,
+      currentInnings: json['currentInnings'] is num
+          ? (json['currentInnings'] as num).toInt()
+          : 1,
       teamAScore: json['teamAScore'] as String? ?? json['scoreA'] as String?,
       teamBScore: json['teamBScore'] as String? ?? json['scoreB'] as String?,
       createdAt: parseDate(json['createdAt']),
@@ -169,9 +179,15 @@ class Match {
       'id': id,
       if (title != null) 'title': title,
       if (tournament != null)
-        'tournament': tournament is Map ? (tournament as Map)['id'] ?? (tournament as Map)['_id'] : tournament,
-      'teamA': teamA is Map ? (teamA as Map)['id'] ?? (teamA as Map)['_id'] : teamA,
-      'teamB': teamB is Map ? (teamB as Map)['id'] ?? (teamB as Map)['_id'] : teamB,
+        'tournament': tournament is Map
+            ? (tournament as Map)['id'] ?? (tournament as Map)['_id']
+            : tournament,
+      'teamA': teamA is Map
+          ? (teamA as Map)['id'] ?? (teamA as Map)['_id']
+          : teamA,
+      'teamB': teamB is Map
+          ? (teamB as Map)['id'] ?? (teamB as Map)['_id']
+          : teamB,
       'format': format,
       'totalOvers': totalOvers,
       if (ballType != null) 'ballType': ballType,
@@ -240,6 +256,12 @@ class Match {
   // ---------------------------------------------------------------------------
   // Convenience Getters
   // ---------------------------------------------------------------------------
+
+  String? get teamAId => _extractId(teamA);
+
+  String? get teamBId => _extractId(teamB);
+
+  String? get tournamentId => _extractId(tournament);
 
   String get teamAName {
     if (teamA is Map) return (teamA as Map)['name']?.toString() ?? 'Team A';
@@ -329,20 +351,27 @@ class Match {
     }
   }
 
+  static String? _extractId(dynamic value) {
+    if (value is Map) {
+      return value['id']?.toString() ?? value['_id']?.toString();
+    }
+    return value?.toString();
+  }
+
   static String _generateShortName(String name) {
     final words = name.trim().split(RegExp(r'\s+'));
     if (words.length > 1) {
       return '${words[0][0]}${words[1][0]}'.toUpperCase();
     }
-    return name.isNotEmpty ? name.substring(0, name.length >= 3 ? 3 : name.length).toUpperCase() : 'TM';
+    return name.isNotEmpty
+        ? name.substring(0, name.length >= 3 ? 3 : name.length).toUpperCase()
+        : 'TM';
   }
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Match &&
-          runtimeType == other.runtimeType &&
-          id == other.id;
+      other is Match && runtimeType == other.runtimeType && id == other.id;
 
   @override
   int get hashCode => id.hashCode;

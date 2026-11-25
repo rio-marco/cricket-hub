@@ -195,20 +195,17 @@ class PlayerDetailNotifier extends StateNotifier<PlayerDetailState> {
   Future<void> loadPlayerDetail() async {
     state = const PlayerDetailLoading();
     try {
-      final player = await _repository.getPlayerById(_playerId);
-      Map<String, dynamic> stats = {};
-      List<dynamic> matches = [];
-
-      try {
-        stats = await _repository.getPlayerStats(_playerId);
-      } catch (_) {}
-
-      try {
-        matches = await _repository.getPlayerMatches(_playerId);
-      } catch (_) {}
+      final results = await Future.wait([
+        _repository.getPlayerById(_playerId),
+        _repository.getPlayerStats(_playerId),
+        _repository.getPlayerMatches(_playerId),
+      ]);
+      final player = results[0] as Player;
+      final stats = results[1] as Map<String, dynamic>;
+      final matches = results[2] as List<dynamic>;
 
       state = PlayerDetailLoaded(
-        player: player,
+        player: Player.applyCareerStats(player, stats),
         stats: stats,
         matchHistory: matches,
       );
@@ -234,7 +231,7 @@ final myPlayerProfileProvider = FutureProvider<Player?>((ref) async {
   final user = ref.watch(currentUserProvider);
   if (user == null) return null;
   final repo = ref.watch(playerRepositoryProvider);
-  return await repo.getPlayerByUserId(user.id);
+  return await repo.getPlayerByUserId(user.id, searchName: user.name);
 });
 
 // =============================================================================

@@ -13,11 +13,8 @@ abstract class AppException implements Exception {
 class ServerException extends AppException {
   final Map<String, dynamic>? errors;
 
-  const ServerException({
-    required String message,
-    int? statusCode,
-    this.errors,
-  }) : super(message, statusCode);
+  const ServerException({required String message, int? statusCode, this.errors})
+    : super(message, statusCode);
 
   @override
   String toString() =>
@@ -76,4 +73,54 @@ class ValidationException extends AppException {
 
   @override
   String toString() => 'ValidationException: $message, errors: $errors';
+}
+
+Map<String, dynamic>? validationErrorsFromResponse(dynamic responseData) {
+  if (responseData is! Map) return null;
+
+  final errors = responseData['errors'];
+  if (errors is Map) {
+    return Map<String, dynamic>.from(errors);
+  }
+
+  final error = responseData['error'];
+  if (error is Map) {
+    return Map<String, dynamic>.from(error);
+  }
+
+  if (error is List) {
+    final mapped = <String, dynamic>{};
+    for (final item in error) {
+      if (item is! Map) continue;
+      final field =
+          item['field']?.toString() ??
+          item['path']?.toString() ??
+          item['param']?.toString() ??
+          'general';
+      final message = item['message']?.toString() ?? 'Invalid value';
+      final existing = mapped[field];
+      if (existing is List) {
+        mapped[field] = [...existing, message];
+      } else if (existing != null) {
+        mapped[field] = [existing.toString(), message];
+      } else {
+        mapped[field] = [message];
+      }
+    }
+    if (mapped.isNotEmpty) return mapped;
+  }
+
+  return null;
+}
+
+String responseMessageFromError(dynamic responseData, String fallback) {
+  if (responseData is Map) {
+    final message = responseData['message']?.toString();
+    if (message != null && message.isNotEmpty) return message;
+    final error = responseData['error'];
+    if (error is String && error.isNotEmpty) return error;
+  } else if (responseData is String && responseData.isNotEmpty) {
+    return responseData;
+  }
+  return fallback;
 }

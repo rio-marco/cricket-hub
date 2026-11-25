@@ -12,7 +12,7 @@ abstract class PlayerRepository {
 
   Future<Player> getPlayerById(String id);
 
-  Future<Player?> getPlayerByUserId(String userId);
+  Future<Player?> getPlayerByUserId(String userId, {String? searchName});
 
   Future<Player> createPlayer(Map<String, dynamic> data);
 

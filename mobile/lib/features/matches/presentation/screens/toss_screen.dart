@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,7 @@ import 'package:mobile/core/theme/app_text_styles.dart';
 import 'package:mobile/core/widgets/app_button.dart';
 import 'package:mobile/core/widgets/error_widget.dart';
 import 'package:mobile/core/widgets/loading_widget.dart';
+
 import '../../domain/entities/match.dart';
 import '../providers/match_provider.dart';
 
@@ -15,10 +17,7 @@ import '../providers/match_provider.dart';
 class TossScreen extends ConsumerStatefulWidget {
   final String matchId;
 
-  const TossScreen({
-    super.key,
-    required this.matchId,
-  });
+  const TossScreen({super.key, required this.matchId});
 
   @override
   ConsumerState<TossScreen> createState() => _TossScreenState();
@@ -29,10 +28,9 @@ class _TossScreenState extends ConsumerState<TossScreen>
   late AnimationController _coinController;
   late Animation<double> _flipAnimation;
 
-  String? _selectedWinnerTeam; // 'teamA' or 'teamB'
-  String _selectedDecision = 'BAT'; // 'BAT' or 'BOWL'
+  String? _selectedWinnerTeam;
+  String _selectedDecision = 'BAT';
   bool _isCoinFlipping = false;
-  String _coinOutcome = 'HEADS'; // 'HEADS' or 'TAILS'
 
   @override
   void initState() {
@@ -47,10 +45,7 @@ class _TossScreenState extends ConsumerState<TossScreen>
 
     _coinController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
-        setState(() {
-          _isCoinFlipping = false;
-          _coinOutcome = math.Random().nextBool() ? 'HEADS' : 'TAILS';
-        });
+        setState(() => _isCoinFlipping = false);
       }
     });
   }
@@ -76,10 +71,24 @@ class _TossScreenState extends ConsumerState<TossScreen>
     }
 
     final winnerTeamId = _selectedWinnerTeam == 'teamA'
+        ? match.teamAId
+        : match.teamBId;
+    final winnerName = _selectedWinnerTeam == 'teamA'
         ? match.teamAName
         : match.teamBName;
 
-    final updated = await ref.read(matchActionProvider.notifier).recordToss(
+    if (winnerTeamId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selected team does not have a valid identifier'),
+        ),
+      );
+      return;
+    }
+
+    final updated = await ref
+        .read(matchActionProvider.notifier)
+        .recordToss(
           matchId: match.id,
           winnerTeamId: winnerTeamId,
           decision: _selectedDecision,
@@ -89,7 +98,7 @@ class _TossScreenState extends ConsumerState<TossScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '$winnerTeamId won toss & chose to ${_selectedDecision == "BAT" ? "Bat" : "Bowl"}!',
+            '$winnerName won toss & chose to ${_selectedDecision == "BAT" ? "Bat" : "Bowl"}!',
           ),
           backgroundColor: AppColors.success,
         ),
@@ -104,22 +113,37 @@ class _TossScreenState extends ConsumerState<TossScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    ref.listen<MatchActionState>(matchActionProvider, (previous, next) {
+      final message = next.errorMessage;
+      if (message != null && message != previous?.errorMessage && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: AppColors.error),
+        );
+      }
+    });
     final matchAsync = ref.watch(matchDetailProvider(widget.matchId));
     final actionState = ref.watch(matchActionProvider);
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+      backgroundColor: isDark
+          ? AppColors.backgroundDark
+          : AppColors.backgroundLight,
       appBar: AppBar(
         title: Text(
           'Match Toss',
-          style: (isDark ? AppTextStyles.titleLargeDark : AppTextStyles.titleLargeLight)
-              .copyWith(fontWeight: FontWeight.w700),
+          style:
+              (isDark
+                      ? AppTextStyles.titleLargeDark
+                      : AppTextStyles.titleLargeLight)
+                  .copyWith(fontWeight: FontWeight.w700),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
         ),
-        backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+        backgroundColor: isDark
+            ? AppColors.surfaceDark
+            : AppColors.surfaceLight,
         elevation: 0,
       ),
       body: matchAsync.when(
@@ -129,7 +153,8 @@ class _TossScreenState extends ConsumerState<TossScreen>
           message: err.toString(),
           onRetry: () => ref.invalidate(matchDetailProvider(widget.matchId)),
         ),
-        data: (match) => _buildTossContent(context, match, isDark, actionState.isLoading),
+        data: (match) =>
+            _buildTossContent(context, match, isDark, actionState.isLoading),
       ),
     );
   }
@@ -163,7 +188,7 @@ class _TossScreenState extends ConsumerState<TossScreen>
 
           // 5. Confirm Toss Button
           AppButton(
-            text: 'Confirm Toss & Start Match',
+            text: 'Record Toss',
             icon: Icons.check_circle_rounded,
             isLoading: isLoading,
             onPressed: () => _confirmToss(match),
@@ -199,7 +224,9 @@ class _TossScreenState extends ConsumerState<TossScreen>
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
-                    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                    color: isDark
+                        ? AppColors.textPrimaryDark
+                        : AppColors.textPrimaryLight,
                   ),
                   textAlign: TextAlign.center,
                   maxLines: 1,
@@ -230,14 +257,19 @@ class _TossScreenState extends ConsumerState<TossScreen>
           Expanded(
             child: Column(
               children: [
-                _buildTeamAvatar(match.teamBShortName, AppColors.secondaryLight),
+                _buildTeamAvatar(
+                  match.teamBShortName,
+                  AppColors.secondaryLight,
+                ),
                 const SizedBox(height: 6),
                 Text(
                   match.teamBName,
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
-                    color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                    color: isDark
+                        ? AppColors.textPrimaryDark
+                        : AppColors.textPrimaryLight,
                   ),
                   textAlign: TextAlign.center,
                   maxLines: 1,
@@ -285,7 +317,8 @@ class _TossScreenState extends ConsumerState<TossScreen>
             animation: _flipAnimation,
             builder: (context, child) {
               final angle = _flipAnimation.value;
-              final isUnder = (angle % (2 * math.pi)) > (math.pi / 2) &&
+              final isUnder =
+                  (angle % (2 * math.pi)) > (math.pi / 2) &&
                   (angle % (2 * math.pi)) < (3 * math.pi / 2);
 
               return Transform(
@@ -321,7 +354,8 @@ class _TossScreenState extends ConsumerState<TossScreen>
                   ),
                   child: Center(
                     child: Transform(
-                      transform: Matrix4.identity()..rotateX(isUnder ? math.pi : 0),
+                      transform: Matrix4.identity()
+                        ..rotateX(isUnder ? math.pi : 0),
                       alignment: Alignment.center,
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -362,7 +396,9 @@ class _TossScreenState extends ConsumerState<TossScreen>
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.primary,
             side: const BorderSide(color: AppColors.primary, width: 1.2),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
           ),
         ),
       ],
@@ -381,7 +417,9 @@ class _TossScreenState extends ConsumerState<TossScreen>
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w700,
-            color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+            color: isDark
+                ? AppColors.textPrimaryDark
+                : AppColors.textPrimaryLight,
           ),
         ),
         const SizedBox(height: 10),
@@ -434,7 +472,9 @@ class _TossScreenState extends ConsumerState<TossScreen>
               : (isDark ? AppColors.cardDark : AppColors.cardLight),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? color : (isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0)),
+            color: isSelected
+                ? color
+                : (isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0)),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -465,7 +505,11 @@ class _TossScreenState extends ConsumerState<TossScreen>
               style: TextStyle(
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                 fontSize: 12.5,
-                color: isSelected ? color : (isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight),
+                color: isSelected
+                    ? color
+                    : (isDark
+                          ? AppColors.textPrimaryDark
+                          : AppColors.textPrimaryLight),
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -475,9 +519,15 @@ class _TossScreenState extends ConsumerState<TossScreen>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  isSelected ? Icons.check_circle_rounded : Icons.radio_button_off,
+                  isSelected
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_off,
                   size: 16,
-                  color: isSelected ? color : (isDark ? AppColors.textDisabledDark : AppColors.textDisabledLight),
+                  color: isSelected
+                      ? color
+                      : (isDark
+                            ? AppColors.textDisabledDark
+                            : AppColors.textDisabledLight),
                 ),
                 const SizedBox(width: 4),
                 Text(
@@ -485,7 +535,11 @@ class _TossScreenState extends ConsumerState<TossScreen>
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: isSelected ? color : (isDark ? AppColors.textDisabledDark : AppColors.textDisabledLight),
+                    color: isSelected
+                        ? color
+                        : (isDark
+                              ? AppColors.textDisabledDark
+                              : AppColors.textDisabledLight),
                   ),
                 ),
               ],
@@ -508,7 +562,9 @@ class _TossScreenState extends ConsumerState<TossScreen>
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w700,
-            color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+            color: isDark
+                ? AppColors.textPrimaryDark
+                : AppColors.textPrimaryLight,
           ),
         ),
         const SizedBox(height: 10),
@@ -558,7 +614,9 @@ class _TossScreenState extends ConsumerState<TossScreen>
               : (isDark ? AppColors.cardDark : AppColors.cardLight),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isSelected ? AppColors.primary : (isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0)),
+            color: isSelected
+                ? AppColors.primary
+                : (isDark ? const Color(0xFF333333) : const Color(0xFFE0E0E0)),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -568,7 +626,11 @@ class _TossScreenState extends ConsumerState<TossScreen>
             Icon(
               icon,
               size: 20,
-              color: isSelected ? AppColors.primary : (isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight),
+              color: isSelected
+                  ? AppColors.primary
+                  : (isDark
+                        ? AppColors.textSecondaryDark
+                        : AppColors.textSecondaryLight),
             ),
             const SizedBox(width: 8),
             Text(
@@ -576,7 +638,11 @@ class _TossScreenState extends ConsumerState<TossScreen>
               style: TextStyle(
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                 fontSize: 13,
-                color: isSelected ? AppColors.primary : (isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight),
+                color: isSelected
+                    ? AppColors.primary
+                    : (isDark
+                          ? AppColors.textPrimaryDark
+                          : AppColors.textPrimaryLight),
               ),
             ),
           ],

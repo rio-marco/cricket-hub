@@ -36,7 +36,16 @@ export const validate = (
     }
 
     // Assign sanitized/typecast value back to request object
-    req[property] = value;
+    if (property === 'query') {
+      Object.defineProperty(req, property, {
+        value,
+        writable: true,
+        configurable: true,
+        enumerable: true,
+      });
+    } else {
+      req[property] = value;
+    }
     next();
   };
 };
