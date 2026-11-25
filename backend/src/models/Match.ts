@@ -26,6 +26,7 @@ export interface IMatch {
   teamB: Types.ObjectId;
   format: MatchFormat;
   totalOvers: number;
+  ballsPerOver: number;
   ballType?: BallType;
   venue?: string;
   city?: string;
@@ -115,6 +116,12 @@ const matchSchema = new Schema<IMatch, MatchModel>(
       required: [true, 'Total overs per innings is required'],
       min: [1, 'Match must have at least 1 over'],
       max: [50, 'Total overs cannot exceed 50'],
+    },
+    ballsPerOver: {
+      type: Number,
+      default: 6,
+      min: [1, 'An over must have at least 1 ball'],
+      max: [8, 'An over cannot exceed 8 balls'],
     },
     ballType: {
       type: String,

@@ -76,6 +76,9 @@ export interface IInnings {
   extras: IExtras;
   currentBatters?: ICurrentBatters;
   currentBowler?: Types.ObjectId;
+  lastOverBowler?: Types.ObjectId;
+  currentOverRuns: number;
+  stateVersion: number;
   target?: number;
   status: InningsStatus;
   fallOfWickets: IFallOfWicket[];
@@ -237,6 +240,20 @@ const inningsSchema = new Schema<IInnings, InningsModel>(
     currentBowler: {
       type: Schema.Types.ObjectId,
       ref: 'Player',
+    },
+    lastOverBowler: {
+      type: Schema.Types.ObjectId,
+      ref: 'Player',
+    },
+    currentOverRuns: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    stateVersion: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     target: {
       type: Number,

@@ -47,6 +47,10 @@ export const createMatchSchema = Joi.object({
     'number.max': 'Total overs cannot exceed 50',
     'any.required': 'Total overs per innings is required',
   }),
+  ballsPerOver: Joi.number().integer().min(1).max(8).default(6).messages({
+    'number.min': 'An over must have at least 1 ball',
+    'number.max': 'An over cannot exceed 8 balls',
+  }),
   ballType: Joi.string()
     .valid(...Object.values(BallType))
     .optional()
@@ -78,6 +82,10 @@ export const updateMatchSchema = Joi.object({
   totalOvers: Joi.number().integer().min(1).max(50).optional().messages({
     'number.min': 'Match must have at least 1 over',
     'number.max': 'Total overs cannot exceed 50',
+  }),
+  ballsPerOver: Joi.number().integer().min(1).max(8).optional().messages({
+    'number.min': 'An over must have at least 1 ball',
+    'number.max': 'An over cannot exceed 8 balls',
   }),
   ballType: Joi.string()
     .valid(...Object.values(BallType))

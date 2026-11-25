@@ -383,6 +383,7 @@ class Innings {
   final int totalWickets;
   final double totalOvers;
   final int totalBalls;
+  final int stateVersion;
   final InningsExtras extras;
   final CurrentBatters? currentBatters;
   final dynamic currentBowler;
@@ -403,6 +404,7 @@ class Innings {
     this.totalWickets = 0,
     this.totalOvers = 0.0,
     this.totalBalls = 0,
+    this.stateVersion = 0,
     this.extras = const InningsExtras(),
     this.currentBatters,
     this.currentBowler,
@@ -443,6 +445,7 @@ class Innings {
       totalWickets: json['totalWickets'] is num ? (json['totalWickets'] as num).toInt() : 0,
       totalOvers: json['totalOvers'] is num ? (json['totalOvers'] as num).toDouble() : 0.0,
       totalBalls: json['totalBalls'] is num ? (json['totalBalls'] as num).toInt() : 0,
+      stateVersion: json['stateVersion'] is num ? (json['stateVersion'] as num).toInt() : 0,
       extras: extras,
       currentBatters: cb,
       currentBowler: json['currentBowler'],
@@ -479,6 +482,7 @@ class Innings {
       'totalWickets': totalWickets,
       'totalOvers': totalOvers,
       'totalBalls': totalBalls,
+      'stateVersion': stateVersion,
       'extras': extras.toJson(),
       if (currentBatters != null) 'currentBatters': currentBatters!.toJson(),
       if (currentBowler != null)

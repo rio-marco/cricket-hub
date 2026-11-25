@@ -87,19 +87,28 @@ class ApiEndpoints {
   // ---------------------------------------------------------------------------
   static const String scoring = '/scoring';
   static String scoringByMatchId(String matchId) => '/scoring/$matchId';
+  static String scoringState(String matchId) => '/scoring/$matchId/state';
+  static String scoringInnings(String matchId, int inningsNumber) =>
+      '/scoring/$matchId/innings/$inningsNumber';
+  static String scoringCommentary(String matchId) => '/scoring/$matchId/commentary';
+  static String scoringStartInnings(String matchId) =>
+      '/scoring/$matchId/start-innings';
   static String scoringBall(String matchId) => '/scoring/$matchId/ball';
   static String scoringUndo(String matchId) => '/scoring/$matchId/undo';
+  static String scoringCorrect(String matchId, String deliveryId) =>
+      '/scoring/$matchId/ball/$deliveryId/correct';
   static String scoringWicket(String matchId) => '/scoring/$matchId/wicket';
   static String scoringExtras(String matchId) => '/scoring/$matchId/extras';
   static String scoringOverEnd(String matchId) => '/scoring/$matchId/over-end';
   static String scoringInningsEnd(String matchId) =>
       '/scoring/$matchId/innings-end';
+  static String scoringComplete(String matchId) => '/scoring/$matchId/complete';
 
   // ---------------------------------------------------------------------------
   // Scorecards
   // ---------------------------------------------------------------------------
   static String scorecardByMatchId(String matchId) => matchScorecard(matchId);
-  static String commentaryByMatchId(String matchId) => matchScorecard(matchId);
+  static String commentaryByMatchId(String matchId) => scoringCommentary(matchId);
   static String matchHighlights(String matchId) => matchScorecard(matchId);
 
   // ---------------------------------------------------------------------------

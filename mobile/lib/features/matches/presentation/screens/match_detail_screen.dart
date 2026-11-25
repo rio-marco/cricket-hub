@@ -335,82 +335,6 @@ class _MatchDetailScreenState extends ConsumerState<MatchDetailScreen>
           ),
           const SizedBox(height: 16),
 
-          // Team Lineups Card
-          AppCard(
-            headerTitle: 'Team Squads',
-            headerLeading: const Icon(Icons.groups_rounded, color: AppColors.primary),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Team A Squad
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        match.teamAName,
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ..._getMockPlayingXI(match.teamAShortName).map((player) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 3.0),
-                          child: Text(
-                            player,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                            ),
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
-
-                Container(
-                  width: 1,
-                  height: 240,
-                  color: isDark ? AppColors.dividerDark : AppColors.dividerLight,
-                ),
-                const SizedBox(width: 12),
-
-                // Team B Squad
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        match.teamBName,
-                        style: TextStyle(
-                          color: AppColors.secondaryLight,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ..._getMockPlayingXI(match.teamBShortName).map((player) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 3.0),
-                          child: Text(
-                            player,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                            ),
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -448,22 +372,6 @@ class _MatchDetailScreenState extends ConsumerState<MatchDetailScreen>
         ],
       ),
     );
-  }
-
-  List<String> _getMockPlayingXI(String teamCode) {
-    return [
-      '1. Ishan Kishan (WK)',
-      '2. Rohit Varma (C)',
-      '3. Suryakumar Rao',
-      '4. Tilak Varma',
-      '5. Hardik Patel',
-      '6. Tim David',
-      '7. Krunal Pandya',
-      '8. Piyush Chawla',
-      '9. Jasprit Bumrah',
-      '10. Mohammed Shami',
-      '11. Deepak Chahar',
-    ];
   }
 
   // ---------------------------------------------------------------------------
@@ -504,12 +412,7 @@ class _MatchDetailScreenState extends ConsumerState<MatchDetailScreen>
                 text: 'Open Scoring Console',
                 icon: Icons.scoreboard_rounded,
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Connecting to live scorer console...'),
-                      backgroundColor: AppColors.primary,
-                    ),
-                  );
+                  context.push('/matches/${match.id}/scoring');
                 },
                 height: 48,
               ),

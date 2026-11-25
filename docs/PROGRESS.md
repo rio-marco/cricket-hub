@@ -198,15 +198,40 @@
 - [x] `flutter analyze` has no errors (remaining lints/deprecation notices only)
 - [x] `flutter test` passed: 18 tests
 
+## PHASE 8: LIVE SCORING ENGINE & FLUTTER SCORING UI ✅
+### Backend
+- [x] Added authoritative ball-by-ball scoring engine with legal deliveries, extras, strike rotation, overs, wickets, fall of wickets, targets, and results
+- [x] Added transactional scoring orchestration with `Idempotency-Key`, `If-Match` optimistic concurrency, `stateVersion`, and `ScoringAudit`
+- [x] Added scoring routes for start-innings, ball, innings-end, complete, state, innings, commentary, undo, and correction
+- [x] Added `ballsPerOver`, innings state-version tracking, populated scoring state responses, and CORS support for scoring headers
+- [x] Fixed idempotent delivery replay, version increment on undo/correction, bowler rotation after an over, and same-bowler consecutive-over rejection
+
+### Flutter
+- [x] Replaced scoring placeholders with real live scoring and full scorecard screens
+- [x] Added real scoring datasource/repository/provider calls for innings start, ball delivery, extras, wickets, correction, undo, and match completion
+- [x] Added bowler selection, scoring controls, correction dialog, undo, commentary, fall of wickets, partnerships, and result rendering
+- [x] Wired match detail scoring navigation and removed the mock playing XI card
+- [x] Added `venue` parsing to scoring match state and added scoring data parsing tests
+
+### Tests
+- [x] `npm run lint` passed
+- [x] `npm test` passed: 9 suites, 34 tests
+- [x] `npm run test:integration` passed: 7 suites, 35 tests
+- [x] `flutter analyze --no-fatal-infos --no-fatal-warnings` passed with 0 errors; 256 existing info/warning lints remain
+- [x] `flutter test` passed: 21 tests
+- [x] Host-run Flutter real-backend integration passed: 1 test
+- [x] `git diff --check` passed
+
 ## Current Status
 - Backend authentication hardened and covered by isolated unit tests
 - Flutter auth/session flow aligned with backend payloads and Riverpod 2
 - Backend query validation works under Express 5
 - Dashboard, Teams, Players, Tournaments, and Matches use real backend APIs with no mock data
+- Live scoring is implemented end-to-end with backend-authoritative rules and real Flutter screens
 - Backend: TypeScript compilation passes with 0 errors
 - Flutter: analyzer passes with 0 errors; remaining notices are lints/deprecations
-- Phases 1-7 complete
-- MongoDB verification complete against isolated local databases; live scoring implementation intentionally not started
+- Phases 1-8 complete
+- MongoDB verification complete against isolated local databases; scoring tests use a single-node replica set for transactions
 
 ## Integration Verification Report
 
@@ -223,6 +248,9 @@
   - `backend/tests/integration/tournaments.integration.test.ts`
   - `backend/tests/integration/matches.integration.test.ts`
   - `backend/tests/integration/integrity.integration.test.ts`
+  - `backend/tests/integration/scoring.integration.test.ts`
+- Flutter scoring parsing tests:
+  - `mobile/test/scoring_data_test.dart`
 - Flutter real-backend datasource integration:
   - `mobile/test/integration/backend_integration_test.dart`
   - Exercises registration, OTP verification, login, refresh rotation, profile, player create/search, team create, tournament create/status/team registration/approval/fixtures, match create/list/toss/detail against the real backend.
@@ -230,10 +258,11 @@
 
 ### 2. Tests Passed and Failed
 - Final backend lint: `npm run lint` passed with 0 TypeScript errors.
-- Final backend unit tests: `npm test` passed: 8 suites, 28 tests.
-- Final backend MongoDB integration: `npm run test:integration -- --silent` passed: 6 suites, 31 tests.
-- Final Flutter analyzer: `flutter analyze --no-fatal-infos --no-fatal-warnings` passed with 0 errors; 246 existing info/warning lints remain.
-- Final Flutter tests: `flutter test` passed: 19 tests, including the new real-backend integration test.
+- Final backend unit tests: `npm test` passed: 9 suites, 34 tests.
+- Final backend MongoDB integration: `npm run test:integration` passed: 7 suites, 35 tests.
+- Final Flutter analyzer: `flutter analyze --no-fatal-infos --no-fatal-warnings` passed with 0 errors; 256 existing info/warning lints remain.
+- Final Flutter tests: `flutter test` passed: 21 tests, including scoring parsing and real-backend integration tests.
+- Final host-run Flutter real-backend integration: `flutter test test/integration/backend_integration_test.dart` passed: 1 test.
 - Final whitespace check: `git diff --check` passed.
 - No tests failed in the final run. Failures found during development were fixed:
   - Invitation response assertion used the wrong nested field.
@@ -243,9 +272,12 @@
   - Player tests needed to read populated `user._id` and use short names within Joi limits.
   - Default backend Jest config initially included integration suites; unit tests are now isolated with `testPathIgnorePatterns`.
   - `ts-node` initially failed to load the Express request augmentation; fixed with `ts-node.files` in `backend/tsconfig.json`.
+  - Scoring wicket tests needed the current striker to verify replacement batter advancement.
+  - Scoring innings-end tests needed to inspect innings 1 because ending it activates innings 2.
 
 ### 3. Database Issues Discovered
 - Isolated MongoDB 7.0.24 was started locally on port 27019 with dbpath `/tmp/opencode/cricket-hub-mongo-it/db`.
+- Scoring tests require multi-document transactions, so the isolated MongoDB runs as single-node replica set `rs0`; no Docker was introduced.
 - Integration tests used `cricket_hub_integration_test`; Flutter backend integration used `cricket_hub_flutter_integration_test`.
 - Destructive drops are limited to isolated local databases; setup rejects non-local hosts and non-test database names.
 - Mongoose emits duplicate schema index warnings for:
@@ -289,10 +321,42 @@
   - `backend/tests/integration/integrity.integration.test.ts`
   - `mobile/test/integration/backend_integration_test.dart`
 
-### 6. Remaining Production Risks
+### 6. Phase 8 Files Changed
+- Added:
+  - `backend/src/models/ScoringAudit.ts`
+  - `backend/src/services/scoringEngine.ts`
+  - `backend/src/services/scoring.service.ts`
+  - `backend/src/controllers/scoring.controller.ts`
+  - `backend/src/routes/scoring.routes.ts`
+  - `backend/src/validators/scoring.validator.ts`
+  - `backend/src/services/__tests__/scoringEngine.test.ts`
+  - `backend/tests/integration/scoring.integration.test.ts`
+  - `mobile/lib/features/matches/domain/entities/scoring.dart`
+  - `mobile/lib/features/matches/data/models/scoring_model.dart`
+  - `mobile/lib/features/matches/data/datasources/scoring_remote_datasource.dart`
+  - `mobile/lib/features/matches/data/repositories/scoring_repository_impl.dart`
+  - `mobile/lib/features/matches/presentation/providers/scoring_provider.dart`
+  - `mobile/lib/features/matches/presentation/screens/live_scoring_screen.dart`
+  - `mobile/lib/features/matches/presentation/screens/full_scorecard_screen.dart`
+  - `mobile/test/scoring_data_test.dart`
+- Modified:
+  - `backend/src/models/Match.ts`
+  - `backend/src/models/Innings.ts`
+  - `backend/src/routes/index.ts`
+  - `backend/src/app.ts`
+  - `backend/src/services/match.service.ts`
+  - `backend/src/validators/match.validator.ts`
+  - `mobile/lib/core/constants/api_endpoints.dart`
+  - `mobile/lib/core/routing/app_router.dart`
+  - `mobile/lib/features/matches/data/models/innings_model.dart`
+  - `mobile/lib/features/matches/domain/entities/innings.dart`
+  - `mobile/lib/features/matches/presentation/screens/match_detail_screen.dart`
+  - `docs/PROGRESS.md`
+
+### 7. Remaining Production Risks
 - Remove duplicate Mongoose index declarations and deprecated query options before production deployment.
 - Decide whether login should reject unverified users before issuing tokens, and whether logout should revoke or shorten access-token validity.
 - Escape all remaining user-controlled regex filters.
 - Keep production `NODE_ENV=production`, use strong distinct JWT secrets, and keep OTP exposure disabled.
 - Add device-based `integration_test` coverage when Linux desktop build tools or an Android/iOS emulator are available; the current Flutter integration test runs on the Flutter test host because this environment lacks CMake/GTK build tooling.
-- Do not start live scoring implementation until explicitly requested.
+- Keep replica-set MongoDB or an equivalent transactional deployment in production so scoring writes remain atomic.

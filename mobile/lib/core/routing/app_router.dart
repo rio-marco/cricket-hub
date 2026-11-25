@@ -28,6 +28,8 @@ import '../../features/matches/presentation/screens/matches_screen.dart';
 import '../../features/matches/presentation/screens/create_match_screen.dart';
 import '../../features/matches/presentation/screens/match_detail_screen.dart';
 import '../../features/matches/presentation/screens/toss_screen.dart';
+import '../../features/matches/presentation/screens/live_scoring_screen.dart' as live_scoring;
+import '../../features/matches/presentation/screens/full_scorecard_screen.dart' as full_scorecard;
 
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
@@ -345,14 +347,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.matchScoring,
         name: 'matchScoring',
-        builder: (context, state) => ScoringScreen(
+        builder: (context, state) => live_scoring.LiveScoringScreen(
           matchId: state.pathParameters['id'] ?? '',
         ),
       ),
       GoRoute(
         path: AppRoutes.matchScorecard,
         name: 'matchScorecard',
-        builder: (context, state) => ScorecardScreen(
+        builder: (context, state) => full_scorecard.FullScorecardScreen(
           matchId: state.pathParameters['id'] ?? '',
         ),
       ),
@@ -518,36 +520,6 @@ class _CricketScreenTemplate extends StatelessWidget {
 // Application Feature Screens
 // -----------------------------------------------------------------------------
 
-
-class ScoringScreen extends StatelessWidget {
-  final String matchId;
-  const ScoringScreen({super.key, required this.matchId});
-
-  @override
-  Widget build(BuildContext context) {
-    return _CricketScreenTemplate(
-      title: 'Live Scoring Console',
-      routePath: '/matches/$matchId/scoring',
-      icon: Icons.scoreboard_outlined,
-      subtitle: 'Ball-by-ball live scoring console, extras, wickets, and overs.',
-    );
-  }
-}
-
-class ScorecardScreen extends StatelessWidget {
-  final String matchId;
-  const ScorecardScreen({super.key, required this.matchId});
-
-  @override
-  Widget build(BuildContext context) {
-    return _CricketScreenTemplate(
-      title: 'Full Scorecard',
-      routePath: '/matches/$matchId/scorecard',
-      icon: Icons.receipt_long_rounded,
-      subtitle: 'Detailed batting and bowling stats, fall of wickets, commentary.',
-    );
-  }
-}
 
 class StatisticsScreen extends StatelessWidget {
   const StatisticsScreen({super.key});

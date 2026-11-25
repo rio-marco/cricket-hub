@@ -39,7 +39,7 @@ export class MatchService {
   /**
    * Helper to check if a user can manage a match (organizer, team owner, admin, or assigned scorer)
    */
-  private async canManageMatch(match: any, userId: string): Promise<boolean> {
+  public async canManageMatch(match: any, userId: string): Promise<boolean> {
     if (await this.isAdmin(userId)) {
       return true;
     }
@@ -172,6 +172,7 @@ export class MatchService {
       teamB: teamBObjectId,
       format: data.format || tournamentDoc?.matchFormat || MatchFormat.T20,
       totalOvers,
+      ballsPerOver: data.ballsPerOver || 6,
       ballType: data.ballType || tournamentDoc?.ballType,
       venue: data.venue || (tournamentDoc?.venues && tournamentDoc.venues[0]) || '',
       city: data.city || tournamentDoc?.city || '',
@@ -336,6 +337,7 @@ export class MatchService {
     if (data.city !== undefined) match.city = data.city;
     if (data.matchDate !== undefined) match.matchDate = new Date(data.matchDate);
     if (data.totalOvers !== undefined) match.totalOvers = data.totalOvers;
+    if (data.ballsPerOver !== undefined) match.ballsPerOver = data.ballsPerOver;
     if (data.ballType !== undefined) match.ballType = data.ballType;
     if (data.format !== undefined) match.format = data.format;
 
@@ -626,6 +628,8 @@ export class MatchService {
           total: 0,
         },
         status: InningsStatus.IN_PROGRESS,
+        currentOverRuns: 0,
+        stateVersion: 0,
         fallOfWickets: [],
         battingOrder,
         battingStats: [],
