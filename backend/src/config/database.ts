@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose, { ConnectOptions } from 'mongoose';
 import config from './env';
 
 const MAX_RETRIES = 5;
@@ -10,7 +10,9 @@ let retryCount = 0;
 /**
  * Connect to MongoDB with automatic retry mechanism
  */
-export const connectDatabase = async (): Promise<typeof mongoose> => {
+export const connectDatabase = async (
+  options: ConnectOptions = {}
+): Promise<typeof mongoose> => {
   if (mongoose.connection.readyState === 1) {
     return mongoose;
   }
@@ -26,6 +28,7 @@ export const connectDatabase = async (): Promise<typeof mongoose> => {
       const conn = await mongoose.connect(config.MONGODB_URI, {
         autoIndex: !config.isProduction, // Disable autoIndex in production for performance
         serverSelectionTimeoutMS: 5000,
+        ...options,
       });
 
       retryCount = 0;

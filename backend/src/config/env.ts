@@ -7,6 +7,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 export interface IConfig {
   PORT: number;
   MONGODB_URI: string;
+  MONGODB_URI_TEST: string;
   JWT_SECRET: string;
   JWT_EXPIRE: string;
   JWT_REFRESH_SECRET: string;
@@ -34,6 +35,8 @@ const nodeEnv = (process.env.NODE_ENV || 'development') as 'development' | 'prod
 export const config: IConfig = {
   PORT: parseInt(process.env.PORT || '5000', 10),
   MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/cricket_hub',
+  MONGODB_URI_TEST:
+    process.env.MONGODB_URI_TEST || 'mongodb://127.0.0.1:27019/cricket_hub_integration_test',
   JWT_SECRET: process.env.JWT_SECRET || 'cricket_hub_jwt_secret_key_change_in_production',
   JWT_EXPIRE: process.env.JWT_EXPIRE || '24h',
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || 'cricket_hub_refresh_secret_key_change_in_production',

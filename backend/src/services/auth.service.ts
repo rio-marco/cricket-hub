@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { MESSAGES } from '../constants/messages';
@@ -85,6 +86,7 @@ export class AuthService {
 
     const accessToken = jwt.sign(accessPayload, env.JWT_SECRET, {
       expiresIn: (env.JWT_EXPIRE || '24h') as any,
+      jwtid: randomUUID(),
     });
 
     const refreshPayload = {
@@ -94,6 +96,7 @@ export class AuthService {
 
     const refreshToken = jwt.sign(refreshPayload, env.JWT_REFRESH_SECRET, {
       expiresIn: (env.JWT_REFRESH_EXPIRE || '7d') as any,
+      jwtid: randomUUID(),
     });
 
     const expiresAt = this.calculateExpiryDate(env.JWT_REFRESH_EXPIRE || '7d');
@@ -153,7 +156,7 @@ export class AuthService {
       user: this.sanitizeUser(newUser),
       userId: newUser._id.toString(),
       message: MESSAGES.AUTH.REGISTER_SUCCESS,
-      otp: env.isDevelopment ? otpCode : undefined,
+      otp: env.isDevelopment || env.isTest ? otpCode : undefined,
     };
   }
 
@@ -296,7 +299,7 @@ export class AuthService {
     return {
       userId: user._id.toString(),
       message: MESSAGES.AUTH.OTP_SENT || 'A new verification code has been sent.',
-      otp: env.isDevelopment ? otpCode : undefined,
+      otp: env.isDevelopment || env.isTest ? otpCode : undefined,
     };
   }
 
@@ -337,7 +340,7 @@ export class AuthService {
     return {
       userId: user._id.toString(),
       message: MESSAGES.AUTH.OTP_SENT || 'Password reset OTP sent successfully.',
-      otp: env.isDevelopment ? otpCode : undefined,
+      otp: env.isDevelopment || env.isTest ? otpCode : undefined,
     };
   }
 

@@ -206,6 +206,93 @@
 - Backend: TypeScript compilation passes with 0 errors
 - Flutter: analyzer passes with 0 errors; remaining notices are lints/deprecations
 - Phases 1-7 complete
+- MongoDB verification complete against isolated local databases; live scoring implementation intentionally not started
 
-## Next Steps
-- Run MongoDB integration verification before production deployment
+## Integration Verification Report
+
+### 1. Integration Tests Added
+- Backend Jest integration config: `backend/jest.integration.config.js`
+- Backend integration helpers and safety guards:
+  - `backend/tests/integration/env.ts`
+  - `backend/tests/integration/setup.ts`
+  - `backend/tests/integration/helpers.ts`
+- Backend real-MongoDB suites:
+  - `backend/tests/integration/auth.integration.test.ts`
+  - `backend/tests/integration/teams.integration.test.ts`
+  - `backend/tests/integration/players.integration.test.ts`
+  - `backend/tests/integration/tournaments.integration.test.ts`
+  - `backend/tests/integration/matches.integration.test.ts`
+  - `backend/tests/integration/integrity.integration.test.ts`
+- Flutter real-backend datasource integration:
+  - `mobile/test/integration/backend_integration_test.dart`
+  - Exercises registration, OTP verification, login, refresh rotation, profile, player create/search, team create, tournament create/status/team registration/approval/fixtures, match create/list/toss/detail against the real backend.
+  - Uses no hardcoded mock responses and no `SecureStorage` platform channels.
+
+### 2. Tests Passed and Failed
+- Final backend lint: `npm run lint` passed with 0 TypeScript errors.
+- Final backend unit tests: `npm test` passed: 8 suites, 28 tests.
+- Final backend MongoDB integration: `npm run test:integration -- --silent` passed: 6 suites, 31 tests.
+- Final Flutter analyzer: `flutter analyze --no-fatal-infos --no-fatal-warnings` passed with 0 errors; 246 existing info/warning lints remain.
+- Final Flutter tests: `flutter test` passed: 19 tests, including the new real-backend integration test.
+- Final whitespace check: `git diff --check` passed.
+- No tests failed in the final run. Failures found during development were fixed:
+  - Invitation response assertion used the wrong nested field.
+  - Match XI authorization test needed a non-participant ObjectId.
+  - Integrity tests needed to account for automatic owner-player enrollment and use unique search prefixes.
+  - Refresh tokens generated identical JWTs in the same second, causing a rotation conflict; fixed with unique `jwtid`.
+  - Player tests needed to read populated `user._id` and use short names within Joi limits.
+  - Default backend Jest config initially included integration suites; unit tests are now isolated with `testPathIgnorePatterns`.
+  - `ts-node` initially failed to load the Express request augmentation; fixed with `ts-node.files` in `backend/tsconfig.json`.
+
+### 3. Database Issues Discovered
+- Isolated MongoDB 7.0.24 was started locally on port 27019 with dbpath `/tmp/opencode/cricket-hub-mongo-it/db`.
+- Integration tests used `cricket_hub_integration_test`; Flutter backend integration used `cricket_hub_flutter_integration_test`.
+- Destructive drops are limited to isolated local databases; setup rejects non-local hosts and non-test database names.
+- Mongoose emits duplicate schema index warnings for:
+  - `User.email`, `User.phone`
+  - `RefreshToken.token`
+  - `Team.name`, `Team.owner`
+- Unique indexes were still created and exercised, but duplicate declarations should be cleaned up.
+- Mongoose emits deprecation warnings for `findOneAndUpdate`/`findOneAndReplace` using `new` instead of `returnDocument: 'after'`.
+- Jest initially hit a missing MongoDB client metadata error; integration setup now supplies the `os` runtime adapter.
+
+### 4. API Issues Discovered
+- Fixed: refresh token rotation collided when two JWTs were generated within the same second; refresh and access tokens now use unique `jwtid` values.
+- Fixed: `ts-node` server startup now loads Express type augmentation through `ts-node.files`.
+- Potential issue remains: login appears to issue tokens before verifying `isVerified`, while `protect` rejects unverified users.
+- Potential issue remains: logout revokes the refresh token only; access tokens may remain valid until expiry.
+- Potential issue remains: some team/player query filters use unescaped regex input; tournament and match filters have been escaped.
+- OTP values are exposed in API responses only when `NODE_ENV=development` or `NODE_ENV=test`; production must never use those modes.
+
+### 5. Files Changed
+- Modified:
+  - `backend/.env.example`
+  - `backend/jest.config.js`
+  - `backend/package.json`
+  - `backend/src/config/database.ts`
+  - `backend/src/config/env.ts`
+  - `backend/src/services/auth.service.ts`
+  - `backend/tsconfig.json`
+  - `mobile/pubspec.yaml`
+  - `mobile/pubspec.lock`
+  - `docs/PROGRESS.md`
+- Added:
+  - `backend/jest.integration.config.js`
+  - `backend/tests/integration/env.ts`
+  - `backend/tests/integration/setup.ts`
+  - `backend/tests/integration/helpers.ts`
+  - `backend/tests/integration/auth.integration.test.ts`
+  - `backend/tests/integration/teams.integration.test.ts`
+  - `backend/tests/integration/players.integration.test.ts`
+  - `backend/tests/integration/tournaments.integration.test.ts`
+  - `backend/tests/integration/matches.integration.test.ts`
+  - `backend/tests/integration/integrity.integration.test.ts`
+  - `mobile/test/integration/backend_integration_test.dart`
+
+### 6. Remaining Production Risks
+- Remove duplicate Mongoose index declarations and deprecated query options before production deployment.
+- Decide whether login should reject unverified users before issuing tokens, and whether logout should revoke or shorten access-token validity.
+- Escape all remaining user-controlled regex filters.
+- Keep production `NODE_ENV=production`, use strong distinct JWT secrets, and keep OTP exposure disabled.
+- Add device-based `integration_test` coverage when Linux desktop build tools or an Android/iOS emulator are available; the current Flutter integration test runs on the Flutter test host because this environment lacks CMake/GTK build tooling.
+- Do not start live scoring implementation until explicitly requested.

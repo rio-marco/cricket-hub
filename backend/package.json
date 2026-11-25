@@ -10,6 +10,7 @@
     "test": "npx jest --forceExit --detectOpenHandles",
     "test:watch": "npx jest --watch --forceExit --detectOpenHandles",
     "test:coverage": "npx jest --coverage --forceExit --detectOpenHandles",
+    "test:integration": "NODE_ENV=test npx jest --config jest.integration.config.js --runInBand --forceExit --detectOpenHandles",
     "lint": "npx tsc --noEmit"
   },
   "keywords": ["cricket", "scoring", "tournament", "auction"],
