@@ -15,11 +15,14 @@ import {
   TournamentTeamStatus,
   TournamentStatus,
   TeamMemberStatus,
+  NotificationCategory,
+  NotificationType,
 } from '../constants/enums';
 import { UserRole } from '../constants/roles';
 import { MESSAGES } from '../constants/messages';
 import { ApiError } from '../utils/apiError';
 import { getPaginationParams, buildPaginationResponse, IPaginationMeta } from '../utils/pagination';
+import { notifySafely } from './notificationHooks.service';
 
 export interface IMatchListResult {
   matches: IMatch[];
@@ -98,6 +101,29 @@ export class MatchService {
       canManage,
       isTeamMember,
     };
+  }
+
+  public async getNotificationRecipients(
+    match: any,
+    excludeUserId?: string
+  ): Promise<string[]> {
+    const populated = await Match.findById(match._id || match)
+      .populate('teamA', 'owner name')
+      .populate('teamB', 'owner name')
+      .populate('scorer', '_id')
+      .populate('tournament', 'organizer name')
+      .lean();
+    if (!populated) return [];
+
+    const recipients = [
+      (populated.teamA as any)?.owner,
+      (populated.teamB as any)?.owner,
+      (populated.scorer as any)?._id || populated.scorer,
+      (populated.tournament as any)?.organizer,
+    ]
+      .map((id: any) => (id ? String(id) : ''))
+      .filter((id: string) => /^[0-9a-fA-F]{24}$/.test(id) && id !== String(excludeUserId || ''));
+    return Array.from(new Set(recipients));
   }
 
   /**
@@ -217,6 +243,18 @@ export class MatchService {
       .populate('teamA', 'name logo location')
       .populate('teamB', 'name logo location')
       .populate('tournament', 'name format matchFormat');
+
+    const recipients = await this.getNotificationRecipients(match._id, userId);
+    await notifySafely(recipients, {
+      type: NotificationType.MATCH_REMINDER,
+      category: NotificationCategory.MATCH,
+      title: 'New match scheduled',
+      body: `${title} is scheduled for ${match.matchDate ? new Date(match.matchDate).toLocaleString() : 'an upcoming date'}.`,
+      data: { matchId: String(match._id), status: match.status },
+      relatedEntityType: 'Match',
+      relatedEntityId: String(match._id),
+      dedupeKey: `match-created:${match._id}`,
+    });
 
     return populatedMatch as unknown as IMatch;
   }
@@ -460,6 +498,19 @@ export class MatchService {
       .populate('teamB', 'name logo')
       .populate('toss.winner', 'name logo');
 
+    const recipients = await this.getNotificationRecipients(match._id, userId);
+    const tossWinnerName = (populatedMatch as any)?.toss?.winner?.name || 'The toss winner';
+    await notifySafely(recipients, {
+      type: NotificationType.MATCH_TOSS,
+      category: NotificationCategory.MATCH,
+      title: 'Toss completed',
+      body: `${tossWinnerName} won the toss and chose to ${decision.toLowerCase()}.`,
+      data: { matchId: String(match._id), winner: String(winner), decision },
+      relatedEntityType: 'Match',
+      relatedEntityId: String(match._id),
+      dedupeKey: `match-toss:${match._id}:${winner}:${decision}`,
+    });
+
     return populatedMatch as unknown as IMatch;
   }
 
@@ -571,6 +622,17 @@ export class MatchService {
       .populate('teamA', 'name logo')
       .populate('teamB', 'name logo')
       .populate('scorer', 'name email avatar phone');
+
+    await notifySafely([scorerId], {
+      type: NotificationType.GENERAL,
+      category: NotificationCategory.MATCH,
+      title: 'Scorer assignment',
+      body: `You were assigned as scorer for ${match.title}.`,
+      data: { matchId: String(match._id), role: 'SCORER' },
+      relatedEntityType: 'Match',
+      relatedEntityId: String(match._id),
+      dedupeKey: `match-scorer:${match._id}:${scorerId}`,
+    });
 
     return populatedMatch as unknown as IMatch;
   }
@@ -689,6 +751,18 @@ export class MatchService {
       .populate('teamA', 'name logo')
       .populate('teamB', 'name logo')
       .populate('scorer', 'name email avatar');
+
+    const recipients = await this.getNotificationRecipients(match._id, userId);
+    await notifySafely(recipients, {
+      type: NotificationType.MATCH_STARTED,
+      category: NotificationCategory.MATCH,
+      title: 'Match is live',
+      body: `${match.title} has started. Follow the live score.`,
+      data: { matchId: String(match._id), inningsId: String(innings1._id) },
+      relatedEntityType: 'Match',
+      relatedEntityId: String(match._id),
+      dedupeKey: `match-started:${match._id}`,
+    });
 
     return {
       match: populatedMatch,

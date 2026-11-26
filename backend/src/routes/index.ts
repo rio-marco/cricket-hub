@@ -7,6 +7,7 @@ import tournamentRoutes from './tournament.routes';
 import matchRoutes from './match.routes';
 import scoringRoutes from './scoring.routes';
 import auctionRoutes from './auction.routes';
+import notificationRoutes from './notification.routes';
 import { ApiResponse } from '../utils/apiResponse';
 
 const router = Router();
@@ -32,5 +33,6 @@ router.use('/tournaments', tournamentRoutes);
 router.use('/matches', matchRoutes);
 router.use('/scoring', scoringRoutes);
 router.use('/auctions', auctionRoutes);
+router.use('/notifications', notificationRoutes);
 
 export default router;

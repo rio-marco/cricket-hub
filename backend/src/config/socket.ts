@@ -2,7 +2,7 @@ import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { registerMatchHandlers } from '../sockets/matchHandlers';
 import { registerAuctionHandlers } from '../sockets/auctionHandlers';
-import { MatchSocketServer, setSocketServer } from '../sockets/publisher';
+import { MatchSocketServer, setSocketServer, userRoom } from '../sockets/publisher';
 import {
   ClientToServerEvents,
   InterServerEvents,
@@ -31,5 +31,14 @@ export const configureSocketIO = (server: HttpServer): MatchSocketServer => {
   setSocketServer(io);
   registerMatchHandlers(io);
   registerAuctionHandlers(io);
+
+  io.on('connection', (socket) => {
+    const user = socket.data.user;
+    if (!user) return;
+    const room = userRoom(user.id);
+    void socket.join(room);
+    socket.data.notificationRooms.add(room);
+  });
+
   return io;
 };

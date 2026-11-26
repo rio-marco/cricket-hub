@@ -496,7 +496,118 @@
   - `mobile/lib/core/routing/app_router.dart`
   - `docs/PROGRESS.md`
 
-### 9. Remaining Production Risks
+## PHASE 11: NOTIFICATIONS & FIREBASE CLOUD MESSAGING ✅
+### 1. Backend Notification System
+- [x] Added notification, device-token, delivery, and preference models with safe indexes
+- [x] Added notification REST APIs for list, unread count, read, read-all, delete, preferences, and device-token registration/removal
+- [x] Added Joi validators and standardized API response/error handling
+- [x] Added user-scoped notification queries with unread/read/category/type/entity filters
+- [x] Added expiration filtering so expired notifications are hidden from list/detail/unread APIs
+- [x] Added dedupe keys and preference checks before fanout
+- [x] Added notification hooks to team, tournament, match, scoring, and auction flows
+
+### 2. FCM Delivery Pipeline
+- [x] Added Firebase Admin initialization with environment-based credentials
+- [x] Added `FcmSender`/`FirebaseFcmSender` abstraction for testable delivery
+- [x] Added persisted delivery records with attempts, retry timing, failure codes, and status
+- [x] Added scheduled retry worker and batch size/interval configuration
+- [x] Added invalid-token deactivation and cancellation handling
+- [x] Included `notificationId`, `type`, `category`, `relatedEntityType`, and `relatedEntityId` in FCM data payloads for deep links
+- [x] Added graceful no-op behavior when Firebase credentials are not configured
+
+### 3. Socket.IO Notification Events
+- [x] Added authenticated user rooms for realtime notification delivery
+- [x] Published `notification:new`, `notification:read`, and `notification:unread-count` events
+- [x] Added event IDs for client-side de-duplication
+- [x] Added socket integration coverage for authenticated notification rooms
+
+### 4. Flutter Notification Center
+- [x] Added Firebase initialization with platform-specific options
+- [x] Added Android manifest permission/metadata and iOS notification capability configuration
+- [x] Added `PushNotificationService` for permissions, token registration, refresh, and tap handling
+- [x] Added post-auth automatic push token registration and logout unregistration
+- [x] Added notification data source, repository, models, and Riverpod providers
+- [x] Added notification list, detail, preferences, and unread badge UI
+- [x] Added GoRouter notification routes and dashboard unread badge wiring
+- [x] Added realtime notification event handling and unread count refresh
+- [x] Fixed read endpoint mismatch and iOS `iosBundleId` Firebase option drift
+
+### 5. Phase 11 Tests
+- [x] Added backend notification validator unit tests
+- [x] Added FCM delivery unit tests with mocked sender and invalid-token/retry cases
+- [x] Added backend notification REST integration tests
+- [x] Added backend notification Socket.IO integration tests
+- [x] Added Flutter notification parsing, preferences, providers, realtime, and push-service tests
+- [x] Extended the host-backend Flutter integration test with notification list, unread count, mark-read, preferences, and device-token registration/removal
+
+### 6. Phase 11 Verification
+- [x] `npm run lint` passed
+- [x] `npm test` passed: 12 suites, 48 tests
+- [x] `npm run test:integration` passed: 12 suites, 57 tests (local MongoDB replica set)
+- [x] `flutter analyze --no-fatal-infos --no-fatal-warnings` has no errors (remaining lints/deprecations only)
+- [x] `flutter test` passed: 37 tests, including the real host-backend integration flow on port 5001
+- [x] `git diff --check` passed
+
+### 7. Phase 11 Files Changed
+- Added:
+  - `backend/src/config/firebase.ts`
+  - `backend/src/controllers/notification.controller.ts`
+  - `backend/src/models/DeviceToken.ts`
+  - `backend/src/models/NotificationDelivery.ts`
+  - `backend/src/models/NotificationPreference.ts`
+  - `backend/src/routes/notification.routes.ts`
+  - `backend/src/services/fcmSender.service.ts`
+  - `backend/src/services/notification.service.ts`
+  - `backend/src/services/notificationDelivery.service.ts`
+  - `backend/src/services/notificationHooks.service.ts`
+  - `backend/src/validators/notification.validator.ts`
+  - `backend/src/validators/__tests__/notification.validator.test.ts`
+  - `backend/src/services/__tests__/notificationDelivery.service.test.ts`
+  - `backend/tests/integration/notification.integration.test.ts`
+  - `backend/tests/integration/notification_socket.integration.test.ts`
+  - `mobile/lib/core/config/firebase_initializer.dart`
+  - `mobile/lib/core/config/firebase_options.dart`
+  - `mobile/lib/features/notifications/`
+  - `mobile/test/features/notifications/`
+- Modified:
+  - `backend/.env.example`
+  - `backend/package.json`
+  - `backend/package-lock.json`
+  - `backend/src/config/env.ts`
+  - `backend/src/config/socket.ts`
+  - `backend/src/constants/enums.ts`
+  - `backend/src/constants/messages.ts`
+  - `backend/src/models/Notification.ts`
+  - `backend/src/routes/index.ts`
+  - `backend/src/server.ts`
+  - `backend/src/services/auction.service.ts`
+  - `backend/src/services/match.service.ts`
+  - `backend/src/services/scoring.service.ts`
+  - `backend/src/services/team.service.ts`
+  - `backend/src/services/tournament.service.ts`
+  - `backend/src/sockets/auth.ts`
+  - `backend/src/sockets/publisher.ts`
+  - `backend/src/sockets/types.ts`
+  - `backend/tests/integration/setup.ts`
+  - `mobile/android/app/src/main/AndroidManifest.xml`
+  - `mobile/ios/Runner/Info.plist`
+  - `mobile/lib/core/constants/api_endpoints.dart`
+  - `mobile/lib/core/routing/app_router.dart`
+  - `mobile/lib/core/storage/secure_storage.dart`
+  - `mobile/lib/features/dashboard/presentation/screens/home_screen.dart`
+  - `mobile/lib/main.dart`
+  - `mobile/test/integration/backend_integration_test.dart`
+  - `docs/PROGRESS.md`
+
+### 8. Remaining Production Risks
+- Configure real Firebase credentials and web VAPID key before expecting device push delivery; current verification uses a mocked FCM sender.
+- Use a shared adapter/store for Socket.IO rooms and notification event de-duplication before running multiple backend instances.
+- Remove duplicate Mongoose index declarations and deprecated query options before production deployment.
+- Decide whether login should reject unverified users before issuing tokens, and whether logout should revoke or shorten access-token validity.
+- Escape all remaining user-controlled regex filters.
+- Keep production `NODE_ENV=production`, use strong distinct JWT secrets, and keep OTP exposure disabled.
+- Add device-based `integration_test` coverage when Linux desktop build tools or an Android/iOS emulator are available; the current Flutter integration test runs on the Flutter test host because this environment lacks CMake/GTK build tooling.
+- Keep replica-set MongoDB or an equivalent transactional deployment in production so scoring and auction writes remain atomic.
 - Remove duplicate Mongoose index declarations and deprecated query options before production deployment.
 - Decide whether login should reject unverified users before issuing tokens, and whether logout should revoke or shorten access-token validity.
 - Escape all remaining user-controlled regex filters.

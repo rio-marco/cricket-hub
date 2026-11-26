@@ -37,8 +37,17 @@ export const MATCH_EVENTS = {
 export const viewerRoom = (matchId: string): string => `match:${matchId}`;
 export const scorerRoom = (matchId: string): string => `match:${matchId}:scorers`;
 
+export const NOTIFICATION_EVENTS = {
+  created: 'notification:new',
+  read: 'notification:read',
+  unreadCount: 'notification:unread-count',
+} as const;
+
+export const userRoom = (userId: string): string => `user:${userId}`;
+
 let io: MatchSocketServer | null = null;
 const publishedEvents = new Set<string>();
+const publishedNotificationEvents = new Set<string>();
 const MAX_PUBLISHED_EVENTS = 1000;
 
 export const setSocketServer = (server: MatchSocketServer): void => {
@@ -46,6 +55,32 @@ export const setSocketServer = (server: MatchSocketServer): void => {
 };
 
 export const getSocketServer = (): MatchSocketServer | null => io;
+
+export const publishNotificationEvent = (
+  userId: string,
+  event: (typeof NOTIFICATION_EVENTS)[keyof typeof NOTIFICATION_EVENTS],
+  payload: RealtimePayload
+): void => {
+  if (!io || !userId) return;
+
+  const eventId = typeof payload.eventId === 'string' ? payload.eventId : '';
+  if (eventId) {
+    if (publishedNotificationEvents.has(eventId)) return;
+    publishedNotificationEvents.add(eventId);
+    if (publishedNotificationEvents.size > MAX_PUBLISHED_EVENTS) {
+      const oldest = publishedNotificationEvents.values().next().value as string | undefined;
+      if (oldest) publishedNotificationEvents.delete(oldest);
+    }
+  }
+
+  const emitter = io.to(userRoom(userId)) as unknown as {
+    emit: (name: string, data: RealtimePayload) => void;
+  };
+  emitter.emit(event, {
+    ...payload,
+    occurredAt: typeof payload.occurredAt === 'string' ? payload.occurredAt : new Date().toISOString(),
+  });
+};
 
 const idString = (value: unknown): string | undefined =>
   value === undefined || value === null ? undefined : String(value);

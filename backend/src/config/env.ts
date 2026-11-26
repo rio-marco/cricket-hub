@@ -25,6 +25,11 @@ export interface IConfig {
   RATE_LIMIT_MAX_REQUESTS: number;
   CORS_ORIGIN: string;
   LOG_LEVEL: string;
+  FIREBASE_PROJECT_ID: string;
+  FIREBASE_CLIENT_EMAIL: string;
+  FIREBASE_PRIVATE_KEY: string;
+  FIREBASE_PUSH_RETRY_BATCH_SIZE: number;
+  FIREBASE_PUSH_RETRY_INTERVAL_MS: number;
   isProduction: boolean;
   isDevelopment: boolean;
   isTest: boolean;
@@ -54,6 +59,11 @@ export const config: IConfig = {
   RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
   CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
   LOG_LEVEL: process.env.LOG_LEVEL || (nodeEnv === 'production' ? 'info' : 'debug'),
+  FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || '',
+  FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL || '',
+  FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY || '',
+  FIREBASE_PUSH_RETRY_BATCH_SIZE: parseInt(process.env.FIREBASE_PUSH_RETRY_BATCH_SIZE || '50', 10),
+  FIREBASE_PUSH_RETRY_INTERVAL_MS: parseInt(process.env.FIREBASE_PUSH_RETRY_INTERVAL_MS || '60000', 10),
   isProduction: nodeEnv === 'production',
   isDevelopment: nodeEnv === 'development',
   isTest: nodeEnv === 'test',

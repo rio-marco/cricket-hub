@@ -104,6 +104,31 @@ class SecureStorage {
     );
   }
 
+  Future<String?> getPushToken() async {
+    return await _storage.read(
+      key: AppConstants.pushTokenKey,
+      aOptions: defaultAndroidOptions,
+      iOptions: defaultIosOptions,
+    );
+  }
+
+  Future<void> savePushToken(String token) async {
+    await _storage.write(
+      key: AppConstants.pushTokenKey,
+      value: token,
+      aOptions: defaultAndroidOptions,
+      iOptions: defaultIosOptions,
+    );
+  }
+
+  Future<void> deletePushToken() async {
+    await _storage.delete(
+      key: AppConstants.pushTokenKey,
+      aOptions: defaultAndroidOptions,
+      iOptions: defaultIosOptions,
+    );
+  }
+
   Future<String?> getString(String key) async {
     return await _storage.read(
       key: key,

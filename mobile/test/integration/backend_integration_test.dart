@@ -1,9 +1,15 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/core/api/api_client.dart';
+import 'package:mobile/core/config/app_config.dart';
+import 'package:mobile/core/storage/secure_storage.dart';
 import 'package:mobile/features/auth/data/datasources/auth_remote_datasource.dart';
 import 'package:mobile/features/matches/data/datasources/match_remote_datasource.dart';
+import 'package:mobile/features/notifications/data/datasources/notifications_remote_datasource.dart';
 import 'package:mobile/features/players/data/datasources/player_remote_datasource.dart';
 import 'package:mobile/features/teams/data/datasources/team_remote_datasource.dart';
 import 'package:mobile/features/tournaments/data/datasources/tournament_remote_datasource.dart';
@@ -31,11 +37,13 @@ void main() {
   );
 
   late Dio dio;
+  late ApiClient apiClient;
   late AuthRemoteDataSource auth;
   late PlayerRemoteDataSource players;
   late TeamRemoteDataSource teams;
   late TournamentRemoteDataSource tournaments;
   late MatchRemoteDataSource matches;
+  late NotificationsRemoteDataSource notifications;
 
   Map<String, dynamic> dataOf(dynamic body) {
     final envelope = Map<String, dynamic>.from(body as Map);
@@ -77,6 +85,13 @@ void main() {
   }
 
   setUpAll(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    HttpOverrides.global = null;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+      (call) async => null,
+    );
     dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
@@ -85,11 +100,17 @@ void main() {
         sendTimeout: const Duration(seconds: 20),
       ),
     );
+    apiClient = ApiClient(
+      config: AppConfig.development(customBaseUrl: baseUrl),
+      storage: SecureStorage(const FlutterSecureStorage()),
+      dio: dio,
+    );
     auth = AuthRemoteDataSourceImpl(dio);
     players = PlayerRemoteDataSourceImpl(dio);
     teams = TeamRemoteDataSourceImpl(dio);
     tournaments = TournamentRemoteDataSourceImpl(dio);
     matches = MatchRemoteDataSourceImpl(dio);
+    notifications = NotificationsRemoteDataSourceImpl(apiClient);
   });
 
   tearDownAll(() {
@@ -182,6 +203,39 @@ void main() {
       await tournaments.approveTeam(tournament.id, registeredA.id);
       await tournaments.approveTeam(tournament.id, registeredB.id);
 
+      authenticate(ownerA);
+      final myNotifications = await notifications.getNotifications();
+      expect(
+        myNotifications.items.any(
+          (item) => item.type == 'TOURNAMENT_REGISTRATION_APPROVED',
+        ),
+        isTrue,
+      );
+      final unreadCount = await notifications.getUnreadCount();
+      expect(unreadCount, greaterThan(0));
+      final firstUnread = myNotifications.items.firstWhere(
+        (item) => !item.isRead,
+      );
+      final markedNotification = await notifications.markAsRead(firstUnread.id);
+      expect(markedNotification.isRead, isTrue);
+      expect(markedNotification.readAt, isNotNull);
+
+      final preferences = await notifications.getPreferences();
+      final updatedPreferences = await notifications.updatePreferences(
+        preferences.copyWith(auctionUpdates: false),
+      );
+      expect(updatedPreferences.auctionUpdates, isFalse);
+
+      final pushToken = 'flutter-fcm-${now.microsecondsSinceEpoch}';
+      await notifications.registerDeviceToken(
+        token: pushToken,
+        platform: 'ANDROID',
+        deviceId: 'flutter-integration-device',
+        appVersion: '1.0.0+1',
+      );
+      await notifications.removeDeviceToken(pushToken);
+
+      authenticate(organizer);
       final fixtures = await tournaments.generateFixtures(tournament.id);
       expect(fixtures, hasLength(1));
       final persistedFixtures = await tournaments.getFixtures(tournament.id);

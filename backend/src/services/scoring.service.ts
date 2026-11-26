@@ -10,10 +10,13 @@ import {
   InningsStatus,
   MatchStatus,
   ResultType,
+  NotificationCategory,
+  NotificationType,
 } from '../constants/enums';
 import { ApiError } from '../utils/apiError';
 import { ScoringCommit } from '../sockets/types';
 import matchService from './match.service';
+import { notifySafely } from './notificationHooks.service';
 import {
   ApplyDeliveryResult,
   CommentaryNames,
@@ -83,6 +86,26 @@ export class ScoringService {
     } finally {
       session.endSession();
     }
+  }
+
+  private async notifyMatchEvent(
+    matchId: string,
+    input: {
+      type: NotificationType;
+      title: string;
+      body: string;
+      data?: Record<string, any>;
+      dedupeKey: string;
+    },
+    actorId?: string
+  ): Promise<void> {
+    const recipients = await matchService.getNotificationRecipients(matchId, actorId);
+    await notifySafely(recipients, {
+      ...input,
+      category: NotificationCategory.MATCH,
+      relatedEntityType: 'Match',
+      relatedEntityId: matchId,
+    });
   }
 
   private async findMatch(matchId: string, session?: ClientSession): Promise<any> {
@@ -692,6 +715,18 @@ export class ScoringService {
       throw error;
     }
 
+    await this.notifyMatchEvent(
+      matchId,
+      {
+        type: NotificationType.MATCH_INNINGS_STARTED,
+        title: 'Innings started',
+        body: `Innings ${commit.inningsNumber} has started.`,
+        data: { matchId, inningsNumber: commit.inningsNumber, stateVersion: commit.stateVersion },
+        dedupeKey: `match-innings-started:${matchId}:${commit.requestKey}`,
+      },
+      userId
+    );
+
     return { ...(await this.getState(matchId)), commit };
   }
 
@@ -827,6 +862,55 @@ export class ScoringService {
     }
 
     const state = await this.getState(matchId);
+    const score = state.activeInnings
+      ? `${state.activeInnings.totalRuns ?? 0}/${state.activeInnings.totalWickets ?? 0} after ${state.activeInnings.totalOvers ?? 0} overs`
+      : 'Score updated';
+
+    await this.notifyMatchEvent(
+      matchId,
+      {
+        type: NotificationType.MATCH_SCORE_UPDATE,
+        title: 'Live score update',
+        body: `${state.match?.title || 'Match'}: ${score}.`,
+        data: {
+          matchId,
+          deliveryId,
+          inningsNumber: commit.inningsNumber,
+          stateVersion: commit.stateVersion,
+        },
+        dedupeKey: `match-score:${matchId}:${commit.requestKey}`,
+      },
+      userId
+    );
+
+    if (commit.isWicket) {
+      await this.notifyMatchEvent(
+        matchId,
+        {
+          type: NotificationType.MATCH_WICKET,
+          title: 'Wicket!',
+          body: `${state.match?.title || 'Match'}: a wicket has fallen. ${score}.`,
+          data: { matchId, deliveryId, inningsNumber: commit.inningsNumber },
+          dedupeKey: `match-wicket:${matchId}:${commit.requestKey}`,
+        },
+        userId
+      );
+    }
+
+    if (commit.overCompleted) {
+      await this.notifyMatchEvent(
+        matchId,
+        {
+          type: NotificationType.MATCH_OVER_COMPLETED,
+          title: 'Over completed',
+          body: `${state.match?.title || 'Match'}: ${score}.`,
+          data: { matchId, inningsNumber: commit.inningsNumber, stateVersion: commit.stateVersion },
+          dedupeKey: `match-over:${matchId}:${commit.requestKey}`,
+        },
+        userId
+      );
+    }
+
     return { ...state, deliveryId, commit };
   }
 
@@ -1064,6 +1148,18 @@ export class ScoringService {
       throw error;
     }
 
+    await this.notifyMatchEvent(
+      matchId,
+      {
+        type: NotificationType.MATCH_SCORE_UPDATE,
+        title: 'Score corrected',
+        body: `A scoring correction was applied to innings ${commit.inningsNumber}.`,
+        data: { matchId, deliveryId: commit.correctedDeliveryId, stateVersion: commit.stateVersion },
+        dedupeKey: `match-score-corrected:${matchId}:${commit.requestKey}`,
+      },
+      userId
+    );
+
     return { ...(await this.getState(matchId)), commit };
   }
 
@@ -1121,6 +1217,18 @@ export class ScoringService {
       if (duplicate && isDuplicateKeyError(error)) return this.getState(matchId);
       throw error;
     }
+
+    await this.notifyMatchEvent(
+      matchId,
+      {
+        type: NotificationType.MATCH_INNINGS_ENDED,
+        title: 'Innings completed',
+        body: `Innings ${commit.inningsNumber} has ended.`,
+        data: { matchId, inningsNumber: commit.inningsNumber, stateVersion: commit.stateVersion },
+        dedupeKey: `match-innings-ended:${matchId}:${commit.requestKey}`,
+      },
+      userId
+    );
 
     return { ...(await this.getState(matchId)), commit };
   }
@@ -1209,7 +1317,24 @@ export class ScoringService {
       throw error;
     }
 
-    return { ...(await this.getState(matchId)), commit };
+    const finalState = await this.getState(matchId);
+    await this.notifyMatchEvent(
+      matchId,
+      {
+        type: NotificationType.MATCH_RESULT,
+        title: 'Match completed',
+        body: `${finalState.match?.title || 'Match'} is complete. ${finalState.result?.description || 'Result recorded.'}`,
+        data: {
+          matchId,
+          result: finalState.result,
+          stateVersion: commit.stateVersion,
+        },
+        dedupeKey: `match-result:${matchId}:${commit.requestKey}`,
+      },
+      userId
+    );
+
+    return { ...finalState, commit };
   }
 }
 

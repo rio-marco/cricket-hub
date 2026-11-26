@@ -3,6 +3,7 @@ import { app } from './app';
 import { env } from './config/env';
 import { configureSocketIO } from './config/socket';
 import { connectDatabase, disconnectDatabase } from './config/database';
+import notificationDeliveryService from './services/notificationDelivery.service';
 import { logger } from './utils/logger';
 
 // Create HTTP server instance
@@ -15,8 +16,8 @@ const io = configureSocketIO(server);
  */
 const startServer = async (): Promise<void> => {
   try {
-    // Connect to MongoDB
     await connectDatabase();
+    notificationDeliveryService.startWorker();
 
     const PORT = env.PORT || 5000;
 
@@ -39,6 +40,7 @@ const startServer = async (): Promise<void> => {
  */
 const gracefulShutdown = async (signal: string): Promise<void> => {
   logger.info(`[Server] Received ${signal}. Initiating graceful shutdown...`);
+  notificationDeliveryService.stopWorker();
 
   // Stop accepting new connections
   server.close(async () => {

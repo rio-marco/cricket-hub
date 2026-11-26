@@ -19,6 +19,10 @@ import '../../src/models/AuctionPlayer';
 import '../../src/models/AuctionBid';
 import '../../src/models/AuctionTeam';
 import '../../src/models/AuctionAudit';
+import '../../src/models/Notification';
+import '../../src/models/NotificationDelivery';
+import '../../src/models/NotificationPreference';
+import '../../src/models/DeviceToken';
 
 const SAFE_DATABASE_NAME = /^cricket_hub_(integration|test)(_[a-zA-Z0-9-]+)?$/;
 const SAFE_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);

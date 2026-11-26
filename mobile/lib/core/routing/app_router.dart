@@ -33,6 +33,7 @@ import '../../features/auction/presentation/screens/auctions_screen.dart';
 import '../../features/auction/presentation/screens/create_auction_screen.dart';
 import '../../features/auction/presentation/screens/auction_detail_screen.dart';
 import '../../features/auction/presentation/screens/auction_bidding_screen.dart';
+import '../../features/notifications/presentation/screens/notifications_screen.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
@@ -553,20 +554,6 @@ class LeaderboardScreen extends StatelessWidget {
       routePath: AppRoutes.leaderboard,
       icon: Icons.leaderboard_rounded,
       subtitle: 'Orange Cap, Purple Cap, Most Valuable Player, and team rankings.',
-    );
-  }
-}
-
-class NotificationsScreen extends StatelessWidget {
-  const NotificationsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const _CricketScreenTemplate(
-      title: 'Notifications',
-      routePath: AppRoutes.notifications,
-      icon: Icons.notifications_active_outlined,
-      subtitle: 'Match reminders, team invitations, auction alerts, and scores.',
     );
   }
 }

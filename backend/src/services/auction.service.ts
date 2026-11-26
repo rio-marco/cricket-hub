@@ -14,11 +14,14 @@ import {
   AuctionBidDecision,
   AuctionPlayerStatus,
   AuctionStatus,
+  NotificationCategory,
+  NotificationType,
 } from '../constants/enums';
 import { UserRole } from '../constants/roles';
 import { MESSAGES } from '../constants/messages';
 import { ApiError } from '../utils/apiError';
 import { getPaginationParams, IPaginationMeta } from '../utils/pagination';
+import { notifySafely } from './notificationHooks.service';
 
 export interface AuctionInput {
   name: string;
@@ -126,6 +129,48 @@ const requestKeyFor = (action: AuctionAuditAction, auctionId: string, input?: { 
   input?.idempotencyKey?.trim() || `${action.toLowerCase()}:${auctionId}:${randomUUID()}`;
 
 export class AuctionService {
+  private async getAuctionRecipients(
+    auction: any,
+    excludeUserId?: string
+  ): Promise<string[]> {
+    const [teams, tournament] = await Promise.all([
+      Team.find({ _id: { $in: auction.teams || [] } }).select('owner name'),
+      auction.tournament
+        ? Tournament.findById(auction.tournament).select('organizer')
+        : Promise.resolve(null),
+    ]);
+
+    const recipients = [
+      auction.createdBy,
+      tournament?.organizer,
+      ...teams.map((team: any) => team.owner),
+    ]
+      .map((id: any) => (id ? String(id) : ''))
+      .filter((id: string) => /^[0-9a-fA-F]{24}$/.test(id) && id !== String(excludeUserId || ''));
+    return Array.from(new Set(recipients));
+  }
+
+  private async notifyAuctionEvent(
+    auctionId: string,
+    input: {
+      type: NotificationType;
+      title: string;
+      body: string;
+      data?: Record<string, any>;
+      dedupeKey: string;
+    },
+    auction: any,
+    excludeUserId?: string
+  ): Promise<void> {
+    const recipients = await this.getAuctionRecipients(auction || { _id: auctionId }, excludeUserId);
+    await notifySafely(recipients, {
+      ...input,
+      category: NotificationCategory.AUCTION,
+      relatedEntityType: 'Auction',
+      relatedEntityId: auctionId,
+    });
+  }
+
   private async transaction<T>(work: (session: ClientSession) => Promise<T>): Promise<T> {
     let lastError: unknown;
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -865,7 +910,7 @@ export class AuctionService {
     const availableCount = await AuctionPlayer.countDocuments({ auction: auction._id, status: AuctionPlayerStatus.AVAILABLE, available: true });
     if (availableCount === 0) throw ApiError.badRequest('Register at least one available player before starting.');
 
-    return this.transaction(async (session) => {
+    const result = await this.transaction(async (session) => {
       const fresh = await this.findAuction(auctionId, session);
       this.applyVersion(input, Number(fresh.stateVersion) || 0);
       const teamCount = await AuctionTeam.countDocuments({ auction: auction._id }).session(session);
@@ -881,6 +926,20 @@ export class AuctionService {
       await this.writeAudit(AuctionAuditAction.START, auctionId, userId, key, version, {}, { currentPlayerId: idString(first?._id) }, session);
       return this.result(auctionId, this.commit(auctionId, AuctionAuditAction.START, 'STARTED', userId, key, version, { auctionPlayerId: idString(first?._id) }), userId, session);
     });
+
+    await this.notifyAuctionEvent(
+      auctionId,
+      {
+        type: NotificationType.AUCTION_STARTED,
+        title: 'Auction started',
+        body: `${auction.name} is now live.`,
+        data: { auctionId, status: AuctionStatus.LIVE },
+        dedupeKey: `auction-started:${auctionId}:${key}`,
+      },
+      auction,
+      userId
+    );
+    return result;
   }
 
   public async pauseAuction(auctionId: string, userId: string, input: { expectedVersion?: number; idempotencyKey?: string } = {}): Promise<any> {
@@ -907,7 +966,7 @@ export class AuctionService {
     if (replay) return this.result(auctionId, undefined, userId);
     if (auction.status !== from) throw ApiError.conflict(`Auction must be ${from} to perform this action.`);
     this.applyVersion(input, Number(auction.stateVersion) || 0);
-    return this.transaction(async (session) => {
+    const result = await this.transaction(async (session) => {
       const fresh = await this.findAuction(auctionId, session);
       if (fresh.status !== from) throw ApiError.conflict(`Auction must be ${from} to perform this action.`);
       this.applyVersion(input, Number(fresh.stateVersion) || 0);
@@ -917,6 +976,20 @@ export class AuctionService {
       await this.writeAudit(action, auctionId, userId, key, version, {}, { status: to }, session);
       return this.result(auctionId, this.commit(auctionId, action, event, userId, key, version), userId, session);
     });
+
+    await this.notifyAuctionEvent(
+      auctionId,
+      {
+        type: to === AuctionStatus.PAUSED ? NotificationType.AUCTION_PAUSED : NotificationType.AUCTION_RESUMED,
+        title: to === AuctionStatus.PAUSED ? 'Auction paused' : 'Auction resumed',
+        body: `${auction.name} is ${to === AuctionStatus.PAUSED ? 'paused' : 'live again'}.`,
+        data: { auctionId, status: to },
+        dedupeKey: `auction-status:${auctionId}:${to}:${key}`,
+      },
+      auction,
+      userId
+    );
+    return result;
   }
 
   public async placeBid(auctionId: string, userId: string, input: AuctionBidInput): Promise<any> {
@@ -933,7 +1006,7 @@ export class AuctionService {
     this.applyVersion(input, Number(auction.stateVersion) || 0);
 
     try {
-      return await this.transaction(async (session) => {
+      const result = await this.transaction(async (session) => {
         const fresh = await this.findAuction(auctionId, session);
         if (fresh.status !== AuctionStatus.LIVE) throw ApiError.conflict(MESSAGES.AUCTION.NOT_ACTIVE);
         this.applyVersion(input, Number(fresh.stateVersion) || 0);
@@ -998,6 +1071,25 @@ export class AuctionService {
         await this.writeAudit(AuctionAuditAction.BID, auctionId, userId, key, version, { teamId: String(input.team), amount }, { bidId: String(bid._id), sequenceNumber }, session, String(player._id), sequenceNumber);
         return this.result(auctionId, this.commit(auctionId, AuctionAuditAction.BID, 'BID_PLACED', userId, key, version, { auctionPlayerId: String(player._id), bidId: String(bid._id), teamId: String(input.team), amount, sequenceNumber }), userId, session);
       });
+
+      await this.notifyAuctionEvent(
+        auctionId,
+        {
+          type: NotificationType.AUCTION_BID_PLACED,
+          title: 'New auction bid',
+          body: `A bid of ${result.commit?.amount ?? input.amount ?? 0} was placed in ${auction.name}.`,
+          data: {
+            auctionId,
+            teamId: input.team,
+            amount: result.commit?.amount ?? input.amount,
+            bidId: result.commit?.bidId,
+          },
+          dedupeKey: `auction-bid:${auctionId}:${key}`,
+        },
+        auction,
+        userId
+      );
+      return result;
     } catch (error) {
       if (isDuplicateKeyError(error) && input.idempotencyKey) {
         return this.result(auctionId, undefined, userId);
@@ -1024,7 +1116,7 @@ export class AuctionService {
     this.applyVersion(input, Number(auction.stateVersion) || 0);
     if (!auction.currentPlayer) throw ApiError.conflict('No player is currently being auctioned.');
 
-    return this.transaction(async (session) => {
+    const result = await this.transaction(async (session) => {
       const fresh = await this.findAuction(auctionId, session);
       this.applyVersion(input, Number(fresh.stateVersion) || 0);
       const player = await this.findAuctionPlayer(String(fresh.currentPlayer), session);
@@ -1097,6 +1189,27 @@ export class AuctionService {
       );
       return this.result(auctionId, this.commit(auctionId, action, sold ? 'PLAYER_SOLD' : 'PLAYER_UNSOLD', userId, key, version, { auctionPlayerId: String(player._id), teamId: idString(player.soldTo), amount }), userId, session);
     });
+
+    await this.notifyAuctionEvent(
+      auctionId,
+      {
+        type: sold ? NotificationType.AUCTION_PLAYER_SOLD : NotificationType.AUCTION_PLAYER_UNSOLD,
+        title: sold ? 'Player sold' : 'Player unsold',
+        body: sold
+          ? `A player was sold for ${result.commit?.amount ?? 0} in ${auction.name}.`
+          : `A player was marked unsold in ${auction.name}.`,
+        data: {
+          auctionId,
+          amount: result.commit?.amount,
+          teamId: result.commit?.teamId,
+          auctionPlayerId: result.commit?.auctionPlayerId,
+        },
+        dedupeKey: `auction-settlement:${auctionId}:${key}`,
+      },
+      auction,
+      userId
+    );
+    return result;
   }
 
   public async markCurrentPlayerSold(auctionId: string, userId: string, input: { expectedVersion?: number; idempotencyKey?: string } = {}): Promise<any> {
@@ -1118,7 +1231,7 @@ export class AuctionService {
     }
     this.applyVersion(input, Number(auction.stateVersion) || 0);
 
-    return this.transaction(async (session) => {
+    const result = await this.transaction(async (session) => {
       const fresh = await this.findAuction(auctionId, session);
       this.applyVersion(input, Number(fresh.stateVersion) || 0);
       await this.releaseCurrentBid(fresh, session);
@@ -1136,6 +1249,20 @@ export class AuctionService {
       await this.writeAudit(AuctionAuditAction.NEXT_PLAYER, auctionId, userId, key, version, {}, { auctionPlayerId: String(next[0]._id) }, session, String(next[0]._id));
       return this.result(auctionId, this.commit(auctionId, AuctionAuditAction.NEXT_PLAYER, 'PLAYER_CHANGED', userId, key, version, { auctionPlayerId: String(next[0]._id) }), userId, session);
     });
+
+    await this.notifyAuctionEvent(
+      auctionId,
+      {
+        type: NotificationType.AUCTION_PLAYER_FORWARD,
+        title: 'Next player up',
+        body: `A new player is up for bidding in ${auction.name}.`,
+        data: { auctionId, auctionPlayerId: result.commit?.auctionPlayerId },
+        dedupeKey: `auction-next-player:${auctionId}:${key}`,
+      },
+      auction,
+      userId
+    );
+    return result;
   }
 
   public async decideBid(auctionId: string, bidId: string, userId: string, input: AuctionDecisionInput): Promise<any> {
@@ -1219,7 +1346,7 @@ export class AuctionService {
     }
     this.applyVersion(input, Number(auction.stateVersion) || 0);
 
-    return this.transaction(async (session) => {
+    const result = await this.transaction(async (session) => {
       const fresh = await this.findAuction(auctionId, session);
       this.applyVersion(input, Number(fresh.stateVersion) || 0);
       let finalPlayerId: string | undefined;
@@ -1296,6 +1423,20 @@ export class AuctionService {
       await this.writeAudit(AuctionAuditAction.COMPLETE, auctionId, userId, key, version, {}, { status: AuctionStatus.COMPLETED, finalPlayerId, finalAmount }, session);
       return this.result(auctionId, this.commit(auctionId, AuctionAuditAction.COMPLETE, 'COMPLETED', userId, key, version, { auctionPlayerId: finalPlayerId, teamId: finalTeamId, amount: finalAmount }), userId, session);
     });
+
+    await this.notifyAuctionEvent(
+      auctionId,
+      {
+        type: NotificationType.AUCTION_COMPLETED,
+        title: 'Auction completed',
+        body: `${auction.name} has been completed.`,
+        data: { auctionId, finalAmount: result.commit?.amount, teamId: result.commit?.teamId },
+        dedupeKey: `auction-completed:${auctionId}:${key}`,
+      },
+      auction,
+      userId
+    );
+    return result;
   }
 }
 

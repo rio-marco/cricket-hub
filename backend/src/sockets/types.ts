@@ -78,6 +78,7 @@ export interface SocketData {
   user?: SocketUser;
   matchRooms: Set<string>;
   auctionRooms: Set<string>;
+  notificationRooms: Set<string>;
 }
 
 export type RealtimePayload = Record<string, unknown>;
@@ -118,6 +119,9 @@ export interface ServerToClientEvents {
   'auction:resumed': (payload: RealtimePayload) => void;
   'auction:completed': (payload: RealtimePayload) => void;
   'auction:error': (payload: RealtimePayload) => void;
+  'notification:new': (payload: RealtimePayload) => void;
+  'notification:read': (payload: RealtimePayload) => void;
+  'notification:unread-count': (payload: RealtimePayload) => void;
 }
 
 export interface InterServerEvents {

@@ -7,6 +7,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/error_widget.dart';
 import '../../../../core/widgets/loading_widget.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../notifications/presentation/providers/notifications_provider.dart';
 import '../../../teams/domain/entities/team.dart';
 import '../../../teams/presentation/widgets/team_card.dart';
 import '../../domain/entities/dashboard_data.dart';
@@ -24,6 +25,7 @@ class HomeScreen extends ConsumerWidget {
 
     final user = ref.watch(currentUserProvider);
     final dashboardState = ref.watch(dashboardProvider);
+    final unreadCount = ref.watch(unreadCountProvider).value ?? 0;
 
     return Scaffold(
       backgroundColor:
@@ -53,7 +55,7 @@ class HomeScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // 1. WELCOME HEADER WITH USER INFO
-                    _buildWelcomeHeader(context, user, isDark),
+                    _buildWelcomeHeader(context, user, isDark, unreadCount),
                     const SizedBox(height: 16),
 
                     // 2. QUICK STATS ROW
@@ -132,7 +134,12 @@ class HomeScreen extends ConsumerWidget {
   // ===========================================================================
   // 1. WELCOME HEADER
   // ===========================================================================
-  Widget _buildWelcomeHeader(BuildContext context, dynamic user, bool isDark) {
+  Widget _buildWelcomeHeader(
+    BuildContext context,
+    dynamic user,
+    bool isDark,
+    int unreadCount,
+  ) {
     final name = user?.name ?? 'Cricket Fan';
     final avatar = user?.avatar;
 
@@ -214,12 +221,16 @@ class HomeScreen extends ConsumerWidget {
               color: isDark ? const Color(0xFF222222) : const Color(0xFFF0F2F5),
               shape: BoxShape.circle,
             ),
-            child: IconButton(
-              icon: const Icon(Icons.notifications_none_rounded),
-              color: isDark
-                  ? AppColors.textPrimaryDark
-                  : AppColors.textPrimaryLight,
-              onPressed: () => context.push(AppRoutes.notifications),
+            child: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: IconButton(
+                icon: const Icon(Icons.notifications_none_rounded),
+                color: isDark
+                    ? AppColors.textPrimaryDark
+                    : AppColors.textPrimaryLight,
+                onPressed: () => context.push(AppRoutes.notifications),
+              ),
             ),
           ),
         ],

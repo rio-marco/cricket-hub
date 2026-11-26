@@ -169,6 +169,11 @@ class ApiEndpoints {
   // ---------------------------------------------------------------------------
   static const String notifications = '/notifications';
   static String notificationById(String id) => '/notifications/$id';
+  static const String notificationUnreadCount = '/notifications/unread-count';
+  static const String notificationPreferences = '/notifications/preferences';
+  static String notificationRead(String id) => '/notifications/$id/read';
   static const String markAllNotificationsRead = '/notifications/read-all';
   static const String registerPushToken = '/notifications/device-token';
+  static const String removePushToken = '/notifications/device-token';
+  static const String listPushTokens = '/notifications/device-tokens';
 }

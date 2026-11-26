@@ -11,11 +11,14 @@ import {
   TournamentTeamStatus,
   MatchStatus,
   MatchFormat,
+  NotificationCategory,
+  NotificationType,
 } from '../constants/enums';
 import { UserRole } from '../constants/roles';
 import { MESSAGES } from '../constants/messages';
 import { ApiError } from '../utils/apiError';
 import { getPaginationParams, buildPaginationResponse, IPaginationMeta } from '../utils/pagination';
+import { notifySafely } from './notificationHooks.service';
 
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -35,6 +38,22 @@ export class TournamentService {
     }
     const user = await User.findById(userId);
     return user?.role === UserRole.ADMIN;
+  }
+
+  private async getTournamentRecipients(
+    tournament: any,
+    excludeUserId?: string
+  ): Promise<string[]> {
+    const registrations = await TournamentTeam.find({ tournament: tournament._id })
+      .populate('team', 'owner name')
+      .lean();
+    const recipients = [
+      tournament.organizer,
+      ...registrations.map((registration: any) => registration.team?.owner),
+    ]
+      .map((id: any) => (id ? String(id) : ''))
+      .filter((id: string) => /^[0-9a-fA-F]{24}$/.test(id) && id !== String(excludeUserId || ''));
+    return Array.from(new Set(recipients));
   }
 
   /**
@@ -307,6 +326,18 @@ export class TournamentService {
     tournament.status = newStatus;
     await tournament.save();
 
+    const recipients = await this.getTournamentRecipients(tournament, userId);
+    await notifySafely(recipients, {
+      type: NotificationType.TOURNAMENT_STATUS,
+      category: NotificationCategory.TOURNAMENT,
+      title: 'Tournament status updated',
+      body: `${tournament.name} is now ${newStatus.replace(/_/g, ' ').toLowerCase()}.`,
+      data: { tournamentId: String(tournament._id), status: newStatus },
+      relatedEntityType: 'Tournament',
+      relatedEntityId: String(tournament._id),
+      dedupeKey: `tournament-status:${tournament._id}:${newStatus}:${tournament.updatedAt || ''}`,
+    });
+
     return tournament;
   }
 
@@ -391,6 +422,21 @@ export class TournamentService {
       'name logo location owner'
     );
 
+    await notifySafely([tournament.organizer], {
+      type: NotificationType.TOURNAMENT_REGISTRATION,
+      category: NotificationCategory.TOURNAMENT,
+      title: 'New tournament registration',
+      body: `${team.name} registered for ${tournament.name} and is awaiting approval.`,
+      data: {
+        tournamentId: String(tournament._id),
+        teamId: String(team._id),
+        registrationId: String(registration._id),
+      },
+      relatedEntityType: 'TournamentTeam',
+      relatedEntityId: String(registration._id),
+      dedupeKey: `tournament-registration:${registration._id}`,
+    });
+
     return populatedRegistration;
   }
 
@@ -443,6 +489,22 @@ export class TournamentService {
     registration.status = TournamentTeamStatus.APPROVED;
     await registration.save();
 
+    const team = await Team.findById(registration.team).select('owner name');
+    await notifySafely([team?.owner], {
+      type: NotificationType.TOURNAMENT_REGISTRATION_APPROVED,
+      category: NotificationCategory.TOURNAMENT,
+      title: 'Tournament registration approved',
+      body: `Your team ${team?.name || ''} was approved for ${tournament.name}.`,
+      data: {
+        tournamentId: String(tournament._id),
+        teamId: String(registration.team),
+        registrationId: String(registration._id),
+      },
+      relatedEntityType: 'TournamentTeam',
+      relatedEntityId: String(registration._id),
+      dedupeKey: `tournament-registration-approved:${registration._id}`,
+    });
+
     return registration.populate('team', 'name logo location');
   }
 
@@ -479,6 +541,22 @@ export class TournamentService {
 
     registration.status = TournamentTeamStatus.REJECTED;
     await registration.save();
+
+    const team = await Team.findById(registration.team).select('owner name');
+    await notifySafely([team?.owner], {
+      type: NotificationType.TOURNAMENT_REGISTRATION_REJECTED,
+      category: NotificationCategory.TOURNAMENT,
+      title: 'Tournament registration rejected',
+      body: `Your team ${team?.name || ''} was not approved for ${tournament.name}.`,
+      data: {
+        tournamentId: String(tournament._id),
+        teamId: String(registration.team),
+        registrationId: String(registration._id),
+      },
+      relatedEntityType: 'TournamentTeam',
+      relatedEntityId: String(registration._id),
+      dedupeKey: `tournament-registration-rejected:${registration._id}`,
+    });
 
     return registration.populate('team', 'name logo location');
   }
@@ -653,6 +731,17 @@ export class TournamentService {
     }
 
     const createdMatches = await Match.insertMany(matchDocs);
+    const recipients = await this.getTournamentRecipients(tournament, userId);
+    await notifySafely(recipients, {
+      type: NotificationType.TOURNAMENT_STATUS,
+      category: NotificationCategory.TOURNAMENT,
+      title: 'Tournament fixtures ready',
+      body: `${createdMatches.length} fixtures were generated for ${tournament.name}.`,
+      data: { tournamentId: String(tournament._id), matchCount: createdMatches.length },
+      relatedEntityType: 'Tournament',
+      relatedEntityId: String(tournament._id),
+      dedupeKey: `tournament-fixtures:${tournament._id}:${createdMatches.length}`,
+    });
 
     return createdMatches;
   }

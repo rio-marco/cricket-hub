@@ -142,9 +142,16 @@ export const AUCTION_MESSAGES = {
 
 export const NOTIFICATION_MESSAGES = {
   FETCHED: 'Notifications retrieved successfully.',
+  UNREAD_COUNT_FETCHED: 'Unread notification count retrieved successfully.',
   MARKED_READ: 'Notification marked as read.',
   ALL_MARKED_READ: 'All notifications marked as read.',
+  DELETED: 'Notification deleted successfully.',
   NOT_FOUND: 'Notification not found.',
+  DEVICE_TOKEN_REGISTERED: 'Device token registered successfully.',
+  DEVICE_TOKEN_REMOVED: 'Device token removed successfully.',
+  DEVICE_TOKENS_FETCHED: 'Device tokens retrieved successfully.',
+  PREFERENCES_FETCHED: 'Notification preferences retrieved successfully.',
+  PREFERENCES_UPDATED: 'Notification preferences updated successfully.',
 };
 
 export const COMMON_MESSAGES = {

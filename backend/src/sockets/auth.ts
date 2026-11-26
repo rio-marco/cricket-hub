@@ -96,5 +96,6 @@ export const socketAuth = async (
   };
   socket.data.matchRooms = new Set<string>();
   socket.data.auctionRooms = new Set<string>();
+  socket.data.notificationRooms = new Set<string>();
   next();
 };

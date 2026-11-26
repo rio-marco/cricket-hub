@@ -15,9 +15,12 @@ import {
   InvitationStatus,
   MatchStatus,
   ResultType,
+  NotificationCategory,
+  NotificationType,
 } from '../constants/enums';
 import { UserRole } from '../constants/roles';
 import { getPaginationParams, IPaginationMeta, buildPaginationResponse } from '../utils/pagination';
+import { notifySafely } from './notificationHooks.service';
 
 export interface ICreateTeamData {
   name: string;
@@ -596,6 +599,17 @@ export class TeamService {
       message: message?.trim() || '',
     });
 
+    await notifySafely([player.user], {
+      type: NotificationType.TEAM_INVITATION,
+      category: NotificationCategory.TEAM,
+      title: 'Team invitation',
+      body: `${team.name} invited you to join the team${message?.trim() ? `: ${message.trim()}` : '.'}`,
+      data: { teamId: String(team._id), invitationId: String(invitation._id), playerId: String(player._id) },
+      relatedEntityType: 'TeamInvitation',
+      relatedEntityId: String(invitation._id),
+      dedupeKey: `team-invitation:${invitation._id}`,
+    });
+
     return TeamInvitation.findById(invitation._id)
       .populate('team', 'name logo location')
       .populate({
@@ -658,6 +672,17 @@ export class TeamService {
       invitedBy: new Types.ObjectId(userId.toString()),
       type: InvitationType.JOIN_REQUEST,
       status: InvitationStatus.PENDING,
+    });
+
+    await notifySafely([team.owner], {
+      type: NotificationType.JOIN_REQUEST,
+      category: NotificationCategory.TEAM,
+      title: 'New join request',
+      body: `A player requested to join ${team.name}.`,
+      data: { teamId: String(team._id), invitationId: String(joinRequest._id), playerId: String(player._id) },
+      relatedEntityType: 'TeamInvitation',
+      relatedEntityId: String(joinRequest._id),
+      dedupeKey: `join-request:${joinRequest._id}`,
     });
 
     return TeamInvitation.findById(joinRequest._id)
@@ -738,6 +763,39 @@ export class TeamService {
         });
       }
     }
+
+    const accepted = status === InvitationStatus.ACCEPTED;
+    const isInvite = invitation.type === InvitationType.INVITE;
+    const recipient = isInvite ? invitation.invitedBy || invitation.user : invitation.user;
+    const notificationType = isInvite
+      ? accepted
+        ? NotificationType.TEAM_INVITATION_ACCEPTED
+        : NotificationType.TEAM_INVITATION_REJECTED
+      : accepted
+      ? NotificationType.JOIN_REQUEST_APPROVED
+      : NotificationType.JOIN_REQUEST_REJECTED;
+    const outcome = isInvite
+      ? accepted
+        ? 'accepted'
+        : 'declined'
+      : accepted
+      ? 'approved'
+      : 'rejected';
+
+    await notifySafely([recipient], {
+      type: notificationType,
+      category: NotificationCategory.TEAM,
+      title: `Team ${outcome}`,
+      body: `Your ${isInvite ? 'invitation to' : 'request to join'} ${team.name} was ${outcome}.`,
+      data: {
+        teamId: String(team._id),
+        invitationId: String(invitation._id),
+        status,
+      },
+      relatedEntityType: 'TeamInvitation',
+      relatedEntityId: String(invitation._id),
+      dedupeKey: `team-invitation-response:${invitation._id}:${status}`,
+    });
 
     return TeamInvitation.findById(invitation._id)
       .populate('team', 'name logo location')
