@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document, Model, Types } from 'mongoose';
-import { AuctionPlayerStatus } from '../constants/enums';
+import { AuctionBidDecision, AuctionPlayerStatus } from '../constants/enums';
 
 export interface IAuctionPlayer {
   auction: Types.ObjectId;
@@ -7,10 +7,18 @@ export interface IAuctionPlayer {
   basePrice: number;
   soldPrice?: number;
   soldTo?: Types.ObjectId;
+  soldAt?: Date;
   status: AuctionPlayerStatus;
+  available: boolean;
   category?: string;
   set?: number;
   order?: number;
+  currentBid: number;
+  highestBidder?: Types.ObjectId;
+  bidCount: number;
+  lastSequence: number;
+  decision: AuctionBidDecision;
+  version: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -46,11 +54,18 @@ const auctionPlayerSchema = new Schema<IAuctionPlayer, AuctionPlayerModel>(
       ref: 'Team',
       index: true,
     },
+    soldAt: {
+      type: Date,
+    },
     status: {
       type: String,
       enum: Object.values(AuctionPlayerStatus),
       default: AuctionPlayerStatus.AVAILABLE,
       index: true,
+    },
+    available: {
+      type: Boolean,
+      default: true,
     },
     category: {
       type: String,
@@ -64,15 +79,44 @@ const auctionPlayerSchema = new Schema<IAuctionPlayer, AuctionPlayerModel>(
       type: Number,
       min: 1,
     },
+    currentBid: {
+      type: Number,
+      default: 0,
+      min: [0, 'Current bid cannot be negative'],
+    },
+    highestBidder: {
+      type: Schema.Types.ObjectId,
+      ref: 'Team',
+    },
+    bidCount: {
+      type: Number,
+      default: 0,
+      min: [0, 'Bid count cannot be negative'],
+    },
+    lastSequence: {
+      type: Number,
+      default: 0,
+      min: [0, 'Bid sequence cannot be negative'],
+    },
+    decision: {
+      type: String,
+      enum: Object.values(AuctionBidDecision),
+      default: AuctionBidDecision.PENDING,
+    },
+    version: {
+      type: Number,
+      default: 0,
+      min: [0, 'Auction player version cannot be negative'],
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// Compound unique index ensuring player is listed only once in an auction
 auctionPlayerSchema.index({ auction: 1, player: 1 }, { unique: true });
 auctionPlayerSchema.index({ auction: 1, status: 1, set: 1, order: 1 });
+auctionPlayerSchema.index({ auction: 1, available: 1, status: 1 });
 
 export const AuctionPlayer = mongoose.model<IAuctionPlayer, AuctionPlayerModel>(
   'AuctionPlayer',

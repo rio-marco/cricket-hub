@@ -13,6 +13,12 @@ import '../../src/models/TournamentTeam';
 import '../../src/models/Match';
 import '../../src/models/Innings';
 import '../../src/models/Delivery';
+import '../../src/models/ScoringAudit';
+import '../../src/models/Auction';
+import '../../src/models/AuctionPlayer';
+import '../../src/models/AuctionBid';
+import '../../src/models/AuctionTeam';
+import '../../src/models/AuctionAudit';
 
 const SAFE_DATABASE_NAME = /^cricket_hub_(integration|test)(_[a-zA-Z0-9-]+)?$/;
 const SAFE_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);

@@ -1,5 +1,7 @@
 import { Server } from 'socket.io';
+import { AuctionAuditAction } from '../constants/enums';
 import {
+  AuctionCommit,
   ClientToServerEvents,
   InterServerEvents,
   RealtimePayload,
@@ -175,4 +177,89 @@ export const publishScoringEvent = (commit: ScoringCommit | undefined, state: an
       matchStatus: state?.match?.status,
     });
   }
+};
+
+export const AUCTION_EVENTS = {
+  state: 'auction:state',
+  started: 'auction:started',
+  playerChanged: 'auction:player_changed',
+  bidPlaced: 'auction:bid_placed',
+  bidRejected: 'auction:bid_rejected',
+  playerSold: 'auction:player_sold',
+  playerUnsold: 'auction:player_unsold',
+  paused: 'auction:paused',
+  resumed: 'auction:resumed',
+  completed: 'auction:completed',
+  error: 'auction:error',
+  join: 'auction:join',
+  leave: 'auction:leave',
+  sync: 'auction:sync',
+  bid: 'auction:bid',
+} as const;
+
+export const auctionRoom = (auctionId: string): string => `auction:${auctionId}`;
+export const auctionControllerRoom = (auctionId: string): string => `auction:${auctionId}:controllers`;
+
+const publishedAuctionEvents = new Set<string>();
+
+const auctionEnvelope = (commit: AuctionCommit): RealtimePayload => ({
+  eventId: `${commit.auctionId}:${commit.requestKey}:${commit.kind}`,
+  auctionId: commit.auctionId,
+  action: commit.kind,
+  stateVersion: commit.stateVersion,
+  occurredAt: new Date().toISOString(),
+  actorId: commit.actorId,
+});
+
+const auctionEventFor = (commit: AuctionCommit): string | undefined => {
+  const mapping: Partial<Record<AuctionAuditAction, string>> = {
+    [AuctionAuditAction.START]: AUCTION_EVENTS.started,
+    [AuctionAuditAction.FORWARD]: AUCTION_EVENTS.playerChanged,
+    [AuctionAuditAction.NEXT_PLAYER]: AUCTION_EVENTS.playerChanged,
+    [AuctionAuditAction.BID]: AUCTION_EVENTS.bidPlaced,
+    [AuctionAuditAction.BID_DECISION]: AUCTION_EVENTS.bidRejected,
+    [AuctionAuditAction.SOLD]: AUCTION_EVENTS.playerSold,
+    [AuctionAuditAction.UNSOLD]: AUCTION_EVENTS.playerUnsold,
+    [AuctionAuditAction.PAUSE]: AUCTION_EVENTS.paused,
+    [AuctionAuditAction.RESUME]: AUCTION_EVENTS.resumed,
+    [AuctionAuditAction.COMPLETE]: AUCTION_EVENTS.completed,
+  };
+  return mapping[commit.kind];
+};
+
+export const publishAuctionEvent = (commit: AuctionCommit | undefined, state: any): void => {
+  if (!io || !commit?.committed) return;
+
+  const base = auctionEnvelope(commit);
+  const eventKey = String(base.eventId);
+  if (publishedAuctionEvents.has(eventKey)) return;
+  publishedAuctionEvents.add(eventKey);
+  if (publishedAuctionEvents.size > MAX_PUBLISHED_EVENTS) {
+    const oldest = publishedAuctionEvents.values().next().value as string | undefined;
+    if (oldest) publishedAuctionEvents.delete(oldest);
+  }
+
+  const emit = (event: string, payload: RealtimePayload): void => {
+    if (!io) return;
+    const emitter = io.to(auctionRoom(commit.auctionId)) as unknown as {
+      emit: (name: string, data: RealtimePayload) => void;
+    };
+    emitter.emit(event, payload);
+  };
+
+  const detail = {
+    ...base,
+    auctionPlayerId: commit.auctionPlayerId,
+    bidId: commit.bidId,
+    teamId: commit.teamId,
+    amount: commit.amount,
+    sequenceNumber: commit.sequenceNumber,
+    decision: commit.decision,
+    currentPlayer: state?.currentPlayer,
+    teams: state?.teams,
+  };
+
+  emit(AUCTION_EVENTS.state, { ...base, state });
+  const event = auctionEventFor(commit);
+  if (event) emit(event, detail);
 };

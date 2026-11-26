@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document, Model, Types } from 'mongoose';
+import { AuctionBidDecision } from '../constants/enums';
 
 export interface IAuctionBid {
   auction: Types.ObjectId;
@@ -6,6 +7,12 @@ export interface IAuctionBid {
   team: Types.ObjectId;
   amount: number;
   bidBy: Types.ObjectId;
+  requestKey?: string;
+  sequenceNumber: number;
+  decision: AuctionBidDecision;
+  rejectionReason?: string;
+  decidedBy?: Types.ObjectId;
+  decidedAt?: Date;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -43,16 +50,50 @@ const auctionBidSchema = new Schema<IAuctionBid, AuctionBidModel>(
       ref: 'User',
       required: [true, 'User placing the bid is required'],
     },
+    requestKey: {
+      type: String,
+      trim: true,
+    },
+    sequenceNumber: {
+      type: Number,
+      required: [true, 'Bid sequence number is required'],
+      min: [1, 'Bid sequence number must be positive'],
+    },
+    decision: {
+      type: String,
+      enum: Object.values(AuctionBidDecision),
+      default: AuctionBidDecision.PENDING,
+      index: true,
+    },
+    rejectionReason: {
+      type: String,
+      trim: true,
+      maxlength: [300, 'Rejection reason cannot exceed 300 characters'],
+    },
+    decidedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    decidedAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// Indexes
 auctionBidSchema.index({ auctionPlayer: 1, amount: -1 });
 auctionBidSchema.index({ auction: 1, team: 1 });
 auctionBidSchema.index({ createdAt: -1 });
+auctionBidSchema.index(
+  { auction: 1, requestKey: 1 },
+  { unique: true, partialFilterExpression: { requestKey: { $type: 'string' } } }
+);
+auctionBidSchema.index(
+  { auctionPlayer: 1, sequenceNumber: 1 },
+  { unique: true, partialFilterExpression: { sequenceNumber: { $type: 'number' } } }
+);
 
 export const AuctionBid = mongoose.model<IAuctionBid, AuctionBidModel>('AuctionBid', auctionBidSchema);
 

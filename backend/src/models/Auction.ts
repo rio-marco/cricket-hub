@@ -6,9 +6,18 @@ export interface IAuction {
   tournament?: Types.ObjectId;
   teams: Types.ObjectId[];
   purseAmount: number;
+  basePrice: number;
   minBidIncrement: number;
+  maxSquadSize: number;
+  minSquadSize: number;
+  playerCategories: string[];
+  rules: Record<string, unknown>;
   status: AuctionStatus;
   currentPlayer?: Types.ObjectId;
+  stateVersion: number;
+  nextSequence: number;
+  startedAt?: Date;
+  endedAt?: Date;
   createdBy: Types.ObjectId;
   createdAt?: Date;
   updatedAt?: Date;
@@ -42,10 +51,33 @@ const auctionSchema = new Schema<IAuction, AuctionModel>(
       required: [true, 'Purse amount per team is required'],
       min: [0, 'Purse amount cannot be negative'],
     },
+    basePrice: {
+      type: Number,
+      default: 0,
+      min: [0, 'Player base price cannot be negative'],
+    },
     minBidIncrement: {
       type: Number,
       default: 100000,
       min: [1, 'Minimum bid increment must be positive'],
+    },
+    maxSquadSize: {
+      type: Number,
+      default: 25,
+      min: [1, 'Maximum squad size must be positive'],
+    },
+    minSquadSize: {
+      type: Number,
+      default: 11,
+      min: [1, 'Minimum squad size must be positive'],
+    },
+    playerCategories: {
+      type: [String],
+      default: [],
+    },
+    rules: {
+      type: Schema.Types.Mixed,
+      default: {},
     },
     status: {
       type: String,
@@ -55,7 +87,23 @@ const auctionSchema = new Schema<IAuction, AuctionModel>(
     },
     currentPlayer: {
       type: Schema.Types.ObjectId,
-      ref: 'Player',
+      ref: 'AuctionPlayer',
+    },
+    stateVersion: {
+      type: Number,
+      default: 0,
+      min: [0, 'State version cannot be negative'],
+    },
+    nextSequence: {
+      type: Number,
+      default: 1,
+      min: [1, 'Bid sequence must be positive'],
+    },
+    startedAt: {
+      type: Date,
+    },
+    endedAt: {
+      type: Date,
     },
     createdBy: {
       type: Schema.Types.ObjectId,
@@ -69,8 +117,8 @@ const auctionSchema = new Schema<IAuction, AuctionModel>(
   }
 );
 
-// Indexes
 auctionSchema.index({ status: 1, createdAt: -1 });
+auctionSchema.index({ tournament: 1, status: 1 });
 
 export const Auction = mongoose.model<IAuction, AuctionModel>('Auction', auctionSchema);
 

@@ -1,3 +1,6 @@
+import { AuctionBidDecision } from '../constants/enums';
+import { AuctionAuditAction } from '../constants/enums';
+
 export type ScoringCommitKind =
   | 'START_INNINGS'
   | 'BALL'
@@ -22,8 +25,24 @@ export interface ScoringCommit {
   isWicket?: boolean;
 }
 
+export interface AuctionCommit {
+  committed: true;
+  auctionId: string;
+  kind: AuctionAuditAction;
+  action: string;
+  requestKey: string;
+  stateVersion: number;
+  actorId: string;
+  auctionPlayerId?: string;
+  bidId?: string;
+  teamId?: string;
+  amount?: number;
+  sequenceNumber?: number;
+  decision?: AuctionBidDecision;
+}
+
 export interface SocketAckError {
-  code: string;
+  code: string | number;
   message: string;
 }
 
@@ -36,7 +55,17 @@ export interface SocketRoomAck {
   state: any;
 }
 
-export type SocketAck = SocketRoomAck | { ok: false; error: SocketAckError };
+export interface AuctionRoomAck {
+  ok: true;
+  auctionId: string;
+  room: string;
+  canBid: boolean;
+  canManage: boolean;
+  stateVersion: number;
+  state: any;
+}
+
+export type SocketAck = SocketRoomAck | AuctionRoomAck | { ok: false; error: SocketAckError };
 
 export interface SocketUser {
   id: string;
@@ -48,6 +77,7 @@ export interface SocketUser {
 export interface SocketData {
   user?: SocketUser;
   matchRooms: Set<string>;
+  auctionRooms: Set<string>;
 }
 
 export type RealtimePayload = Record<string, unknown>;
@@ -56,6 +86,13 @@ export interface ClientToServerEvents {
   'match:join': (payload: { matchId: string }, ack?: (response: SocketAck) => void) => void;
   'match:leave': (payload: { matchId: string }, ack?: (response: SocketAck) => void) => void;
   'match:sync': (payload: { matchId: string }, ack?: (response: SocketAck) => void) => void;
+  'auction:join': (payload: { auctionId: string }, ack?: (response: SocketAck) => void) => void;
+  'auction:leave': (payload: { auctionId: string }, ack?: (response: SocketAck) => void) => void;
+  'auction:sync': (payload: { auctionId: string }, ack?: (response: SocketAck) => void) => void;
+  'auction:bid': (
+    payload: { auctionId: string; team: string; amount?: number; expectedVersion?: number; idempotencyKey?: string },
+    ack?: (response: SocketAck) => void
+  ) => void;
 }
 
 export interface ServerToClientEvents {
@@ -70,6 +107,17 @@ export interface ServerToClientEvents {
   'match:innings-started': (payload: RealtimePayload) => void;
   'match:innings-ended': (payload: RealtimePayload) => void;
   'match:completed': (payload: RealtimePayload) => void;
+  'auction:state': (payload: RealtimePayload) => void;
+  'auction:started': (payload: RealtimePayload) => void;
+  'auction:player_changed': (payload: RealtimePayload) => void;
+  'auction:bid_placed': (payload: RealtimePayload) => void;
+  'auction:bid_rejected': (payload: RealtimePayload) => void;
+  'auction:player_sold': (payload: RealtimePayload) => void;
+  'auction:player_unsold': (payload: RealtimePayload) => void;
+  'auction:paused': (payload: RealtimePayload) => void;
+  'auction:resumed': (payload: RealtimePayload) => void;
+  'auction:completed': (payload: RealtimePayload) => void;
+  'auction:error': (payload: RealtimePayload) => void;
 }
 
 export interface InterServerEvents {

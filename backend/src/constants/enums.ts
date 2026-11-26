@@ -171,6 +171,7 @@ export enum AuctionStatus {
   DRAFT = 'DRAFT',
   UPCOMING = 'UPCOMING',
   LIVE = 'LIVE',
+  PAUSED = 'PAUSED',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
 }
@@ -182,6 +183,38 @@ export enum AuctionPlayerStatus {
   AVAILABLE = 'AVAILABLE',
   SOLD = 'SOLD',
   UNSOLD = 'UNSOLD',
+}
+
+/**
+ * Authoritative actions recorded in the auction audit trail
+ */
+export enum AuctionAuditAction {
+  CREATE = 'CREATE',
+  UPDATE = 'UPDATE',
+  START = 'START',
+  PAUSE = 'PAUSE',
+  RESUME = 'RESUME',
+  COMPLETE = 'COMPLETE',
+  ADD_PLAYER = 'ADD_PLAYER',
+  REMOVE_PLAYER = 'REMOVE_PLAYER',
+  AVAILABILITY = 'AVAILABILITY',
+  FORWARD = 'FORWARD',
+  ADD_TEAM = 'ADD_TEAM',
+  REMOVE_TEAM = 'REMOVE_TEAM',
+  BID = 'BID',
+  BID_DECISION = 'BID_DECISION',
+  SOLD = 'SOLD',
+  UNSOLD = 'UNSOLD',
+  NEXT_PLAYER = 'NEXT_PLAYER',
+}
+
+/**
+ * Organizer decision applied to a recorded bid
+ */
+export enum AuctionBidDecision {
+  PENDING = 'PENDING',
+  ACCEPTED = 'ACCEPTED',
+  REJECTED = 'REJECTED',
 }
 
 /**

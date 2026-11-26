@@ -130,6 +130,30 @@ class ApiEndpoints {
   static String auctionCurrentPlayer(String id) => '/auctions/$id/current-player';
   static String auctionTeamPurse(String id, String teamId) =>
       '/auctions/$id/teams/$teamId/purse';
+  static String auctionState(String id) => '/auctions/$id/state';
+  static String auctionHistory(String id) => '/auctions/$id/history';
+  static String auctionResults(String id) => '/auctions/$id/results';
+  static const String auctionUpcoming = '/auctions/upcoming';
+  static const String auctionLive = '/auctions/live';
+  static const String auctionCompleted = '/auctions/completed';
+  static String auctionPlayerById(String id, String playerId) =>
+      '/auctions/$id/players/$playerId';
+  static String auctionPlayerAvailability(String id, String playerId) =>
+      '/auctions/$id/players/$playerId/availability';
+  static String auctionPlayerForward(String id, String playerId) =>
+      '/auctions/$id/players/$playerId/forward';
+  static String auctionTeams(String id) => '/auctions/$id/teams';
+  static String auctionTeamById(String id, String teamId) =>
+      '/auctions/$id/teams/$teamId';
+  static String auctionStart(String id) => '/auctions/$id/start';
+  static String auctionPause(String id) => '/auctions/$id/pause';
+  static String auctionResume(String id) => '/auctions/$id/resume';
+  static String auctionComplete(String id) => '/auctions/$id/complete';
+  static String auctionBidDecision(String id, String bidId) =>
+      '/auctions/$id/bids/$bidId/decision';
+  static String auctionSold(String id) => '/auctions/$id/sold';
+  static String auctionUnsold(String id) => '/auctions/$id/unsold';
+  static String auctionNext(String id) => '/auctions/$id/next';
 
   // ---------------------------------------------------------------------------
   // Leaderboards

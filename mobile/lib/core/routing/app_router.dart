@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../features/auth/domain/entities/user.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/auth/presentation/screens/onboarding_screen.dart';
@@ -30,10 +29,13 @@ import '../../features/matches/presentation/screens/match_detail_screen.dart';
 import '../../features/matches/presentation/screens/toss_screen.dart';
 import '../../features/matches/presentation/screens/live_scoring_screen.dart' as live_scoring;
 import '../../features/matches/presentation/screens/full_scorecard_screen.dart' as full_scorecard;
+import '../../features/auction/presentation/screens/auctions_screen.dart';
+import '../../features/auction/presentation/screens/create_auction_screen.dart';
+import '../../features/auction/presentation/screens/auction_detail_screen.dart';
+import '../../features/auction/presentation/screens/auction_bidding_screen.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
-import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_scaffold.dart';
 import '../widgets/bottom_nav_bar.dart';
@@ -74,6 +76,7 @@ class AppRoutes {
   static const String matchScorecard = '/matches/:id/scorecard';
   static const String statistics = '/statistics';
   static const String auctions = '/auctions';
+  static const String createAuction = '/auctions/create';
   static const String auctionDetail = '/auctions/:id';
   static const String auctionBidding = '/auctions/:id/bidding';
   static const String leaderboard = '/leaderboard';
@@ -373,6 +376,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const AuctionsScreen(),
       ),
       GoRoute(
+        path: AppRoutes.createAuction,
+        name: 'createAuction',
+        builder: (context, state) => const CreateAuctionScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.auctionDetail,
         name: 'auctionDetail',
         builder: (context, state) => AuctionDetailScreen(
@@ -531,50 +539,6 @@ class StatisticsScreen extends StatelessWidget {
       routePath: AppRoutes.statistics,
       icon: Icons.bar_chart_rounded,
       subtitle: 'Top run scorers, wicket takers, strike rates, and team comparisons.',
-    );
-  }
-}
-
-class AuctionsScreen extends StatelessWidget {
-  const AuctionsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const _CricketScreenTemplate(
-      title: 'Player Auctions',
-      routePath: AppRoutes.auctions,
-      icon: Icons.gavel_rounded,
-      subtitle: 'Live auction rooms, franchise bidding, budgets, and squads.',
-    );
-  }
-}
-
-class AuctionDetailScreen extends StatelessWidget {
-  final String auctionId;
-  const AuctionDetailScreen({super.key, required this.auctionId});
-
-  @override
-  Widget build(BuildContext context) {
-    return _CricketScreenTemplate(
-      title: 'Auction Room',
-      routePath: '/auctions/$auctionId',
-      icon: Icons.account_balance_wallet_outlined,
-      subtitle: 'Team purse budgets, marquee players, and auction rules.',
-    );
-  }
-}
-
-class AuctionBiddingScreen extends StatelessWidget {
-  final String auctionId;
-  const AuctionBiddingScreen({super.key, required this.auctionId});
-
-  @override
-  Widget build(BuildContext context) {
-    return _CricketScreenTemplate(
-      title: 'Live Auction Bidding',
-      routePath: '/auctions/$auctionId/bidding',
-      icon: Icons.pan_tool_alt_rounded,
-      subtitle: 'Real-time countdown timer, bidding paddles, and sold confirmations.',
     );
   }
 }
