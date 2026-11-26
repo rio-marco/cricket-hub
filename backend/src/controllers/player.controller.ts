@@ -3,6 +3,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { ApiResponse } from '../utils/apiResponse';
 import { MESSAGES } from '../constants/messages';
 import playerService from '../services/player.service';
+import { normalizeStatisticsFilters } from '../services/playerStatistics.service';
 
 /**
  * Create player profile for authenticated user
@@ -97,7 +98,10 @@ export const deletePlayer = asyncHandler(async (req: Request, res: Response): Pr
  * GET /api/v1/players/:id/stats
  */
 export const getPlayerStats = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const stats = await playerService.getPlayerStats(req.params.id as string);
+  const stats = await playerService.getPlayerStats(
+    req.params.id as string,
+    normalizeStatisticsFilters(req.query)
+  );
   ApiResponse.success(
     res,
     200,

@@ -287,9 +287,11 @@
 - Live scoring is implemented end-to-end with backend-authoritative rules and real Flutter screens
 - Real-time match synchronization is implemented with authenticated Socket.IO rooms, versioned post-commit events, and reconnect recovery
 - Live player auctions are implemented end-to-end with backend-authoritative bids, budgets, sequence numbers, lifecycle, and Socket.IO state events
+- Notifications and FCM are implemented with REST, Socket.IO, preferences, retrying deliveries, and a Flutter notification center
+- Player statistics and leaderboards are computed on the backend from authoritative persisted match, innings, and delivery data
 - Backend: TypeScript compilation passes with 0 errors
 - Flutter: analyzer passes with 0 errors; remaining notices are lints/deprecations
-- Phases 1-10 complete
+- Phases 1-12 complete
 - MongoDB verification complete against isolated local databases; scoring tests use a single-node replica set for transactions
 
 ## Integration Verification Report
@@ -307,12 +309,13 @@
   - `backend/tests/integration/tournaments.integration.test.ts`
   - `backend/tests/integration/matches.integration.test.ts`
   - `backend/tests/integration/integrity.integration.test.ts`
-  - `backend/tests/integration/scoring.integration.test.ts`
+   - `backend/tests/integration/scoring.integration.test.ts`
+   - `backend/tests/integration/statistics.integration.test.ts`
 - Flutter scoring parsing tests:
   - `mobile/test/scoring_data_test.dart`
 - Flutter real-backend datasource integration:
   - `mobile/test/integration/backend_integration_test.dart`
-  - Exercises registration, OTP verification, login, refresh rotation, profile, player create/search, team create, tournament create/status/team registration/approval/fixtures, match create/list/toss/detail against the real backend.
+   - Exercises registration, OTP verification, login, refresh rotation, profile, player create/search, statistics overview, player statistics, leaderboard, team create, tournament create/status/team registration/approval/fixtures, match create/list/toss/detail against the real backend.
   - Uses no hardcoded mock responses and no `SecureStorage` platform channels.
 
 ### 2. Tests Passed and Failed
@@ -615,3 +618,75 @@
 - Add device-based `integration_test` coverage when Linux desktop build tools or an Android/iOS emulator are available; the current Flutter integration test runs on the Flutter test host because this environment lacks CMake/GTK build tooling.
 - Keep replica-set MongoDB or an equivalent transactional deployment in production so scoring writes remain atomic.
 - Socket.IO rooms and published-event de-duplication are process-local; use a Redis adapter and shared de-duplication before running multiple backend instances.
+
+## PHASE 12: PLAYER STATISTICS & LEADERBOARDS ✅
+### 1. Backend Statistics Engine
+- [x] Added pure batting, bowling, fielding, leaderboard, and stat-formatting helpers in `backend/src/utils/statistics.ts`
+- [x] Added backend-authoritative statistics service that derives career summaries from completed matches, eligible innings, persisted innings stats, and active deliveries
+- [x] Excluded no-result, abandoned, and drawn matches and required all innings to be completed or declared before a match contributes to statistics
+- [x] Calculated batting runs, balls, boundaries, dismissals, not-outs, highest score, thirties/fifties/hundreds, ducks, average, and strike rate
+- [x] Calculated bowling balls, overs, maidens, runs conceded, wickets, dot balls, wides, no-balls, best figures, hauls, average, economy, and strike rate
+- [x] Calculated fielding catches, run-outs, stumpings, and total dismissals from active non-undone deliveries with corrected-delivery de-duplication
+- [x] Added recent form plus tournament-wise, season-wise, and format-wise breakdowns
+- [x] Added leaderboard normalization for runs, wickets, averages, strike rates, economy, boundaries, and fielding dismissals with metric aliases
+- [x] Added filter normalization and pagination for player statistics, overview, and leaderboard endpoints
+- [x] Added indexed queries for match eligibility and statistics date/tournament/format filters
+
+### 2. Backend APIs
+- [x] Added `GET /api/v1/statistics/players/:playerId/overall`, `GET /api/v1/statistics/players/:playerId/form`, and player breakdown routes
+- [x] Added `GET /api/v1/statistics` for filtered top batsmen, bowlers, and fielders
+- [x] Added `GET /api/v1/leaderboards/:category` for paginated metric leaderboards
+- [x] Added Joi validation and standardized statistics messages/responses
+- [x] Updated legacy `GET /api/v1/players/:id/stats` to delegate to the new statistics service while retaining the old response shape
+
+### 3. Flutter Statistics UI
+- [x] Added statistics endpoint helpers to `mobile/lib/core/constants/api_endpoints.dart`
+- [x] Added statistics domain entities for summaries, breakdowns, recent form, overview entries, and leaderboard entries
+- [x] Added statistics remote data source, repository implementation, and Riverpod providers
+- [x] Replaced statistics, leaderboard, and player-profile statistics placeholders with real backend-backed screens and widgets
+- [x] Added filters for tournament, format, season, and leaderboard metric
+- [x] Wired real statistics and leaderboard routes in `mobile/lib/core/routing/app_router.dart`
+
+### 4. Phase 12 Tests
+- [x] Added backend statistics calculator unit tests
+- [x] Added backend real-MongoDB statistics integration tests covering eligibility, filtering, breakdowns, overview, leaderboards, validation, and legacy compatibility
+- [x] Added Flutter statistics parsing, provider, widget, endpoint, and failure-handling tests
+- [x] Extended the host-backend Flutter integration test with player statistics, overview, leaderboard, and tournament-scoped statistics calls
+
+### 5. Phase 12 Verification
+- [x] `npm run lint` passed
+- [x] `npm test` passed: 13 suites, 54 tests
+- [x] `npm run test:integration` passed: 13 suites, 62 tests (local MongoDB replica set)
+- [x] `flutter analyze --no-fatal-infos --no-fatal-warnings` passed with 0 errors; remaining lints/deprecations are non-fatal
+- [x] `flutter test test/integration/backend_integration_test.dart` passed
+- [x] `flutter test` passed: 44 tests, including the real host-backend integration flow on port 5001
+- [x] `git diff --check` passed
+
+### 6. Phase 12 Files Changed
+- Added:
+  - `backend/src/controllers/statistics.controller.ts`
+  - `backend/src/routes/leaderboard.routes.ts`
+  - `backend/src/routes/statistics.routes.ts`
+  - `backend/src/services/playerStatistics.service.ts`
+  - `backend/src/utils/statistics.ts`
+  - `backend/src/utils/__tests__/statistics.test.ts`
+  - `backend/src/validators/statistics.validator.ts`
+  - `backend/tests/integration/statistics.integration.test.ts`
+  - `mobile/lib/features/statistics/`
+  - `mobile/test/features/statistics/`
+- Modified:
+  - `backend/src/constants/messages.ts`
+  - `backend/src/controllers/__tests__/player.controller.test.ts`
+  - `backend/src/controllers/player.controller.ts`
+  - `backend/src/models/Delivery.ts`
+  - `backend/src/models/Innings.ts`
+  - `backend/src/models/Match.ts`
+  - `backend/src/routes/index.ts`
+  - `backend/src/routes/player.routes.ts`
+  - `backend/src/services/player.service.ts`
+  - `backend/tests/integration/players.integration.test.ts`
+  - `mobile/lib/core/constants/api_endpoints.dart`
+  - `mobile/lib/core/routing/app_router.dart`
+  - `mobile/lib/features/players/presentation/screens/player_detail_screen.dart`
+  - `mobile/test/integration/backend_integration_test.dart`
+  - `docs/PROGRESS.md`

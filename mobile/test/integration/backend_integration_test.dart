@@ -11,6 +11,8 @@ import 'package:mobile/features/auth/data/datasources/auth_remote_datasource.dar
 import 'package:mobile/features/matches/data/datasources/match_remote_datasource.dart';
 import 'package:mobile/features/notifications/data/datasources/notifications_remote_datasource.dart';
 import 'package:mobile/features/players/data/datasources/player_remote_datasource.dart';
+import 'package:mobile/features/statistics/data/datasources/statistics_remote_datasource.dart';
+import 'package:mobile/features/statistics/domain/entities/statistics_filter.dart';
 import 'package:mobile/features/teams/data/datasources/team_remote_datasource.dart';
 import 'package:mobile/features/tournaments/data/datasources/tournament_remote_datasource.dart';
 
@@ -44,6 +46,7 @@ void main() {
   late TournamentRemoteDataSource tournaments;
   late MatchRemoteDataSource matches;
   late NotificationsRemoteDataSource notifications;
+  late StatisticsRemoteDataSource statistics;
 
   Map<String, dynamic> dataOf(dynamic body) {
     final envelope = Map<String, dynamic>.from(body as Map);
@@ -111,6 +114,7 @@ void main() {
     tournaments = TournamentRemoteDataSourceImpl(dio);
     matches = MatchRemoteDataSourceImpl(dio);
     notifications = NotificationsRemoteDataSourceImpl(apiClient);
+    statistics = StatisticsRemoteDataSource(apiClient);
   });
 
   tearDownAll(() {
@@ -148,6 +152,25 @@ void main() {
       final foundPlayers = await players.getPlayers(search: playerName);
       expect(foundPlayers.items.any((item) => item.id == player.id), isTrue);
 
+      final playerStats = await statistics.getPlayerStatistics(player.id);
+      expect(playerStats.playerId, player.id);
+      expect(playerStats.matches, 0);
+      expect(playerStats.batting.runs, 0);
+
+      final overview = await statistics.getOverview();
+      expect(overview.topBatsmen.length, lessThanOrEqualTo(5));
+      expect(overview.topBowlers.length, lessThanOrEqualTo(5));
+      expect(overview.topFielders.length, lessThanOrEqualTo(5));
+
+      final leaderboard = await statistics.getLeaderboard(
+        metric: 'runs',
+        limit: 5,
+      );
+      expect(leaderboard.page, 1);
+      expect(leaderboard.limit, 5);
+      expect(leaderboard.items.length, lessThanOrEqualTo(5));
+      expect(leaderboard.items.every((item) => item.metric == 'runs'), isTrue);
+
       authenticate(ownerA);
       final teamA = await teams.createTeam(
         name: 'Flutter A ${DateTime.now().microsecondsSinceEpoch}',
@@ -182,6 +205,12 @@ void main() {
         'registrationFee': 0,
       });
       expect(tournament.id, isNotEmpty);
+
+      final tournamentOverview = await statistics.getOverview(
+        filter: StatisticsFilter(tournamentId: tournament.id, format: 'T20'),
+      );
+      expect(tournamentOverview.filters.tournamentId, tournament.id);
+      expect(tournamentOverview.filters.format, 'T20');
 
       final opened = await tournaments.updateTournamentStatus(
         tournament.id,

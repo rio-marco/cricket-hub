@@ -7,6 +7,7 @@ import '../../../../core/widgets/empty_state_widget.dart';
 import '../../../../core/widgets/error_widget.dart';
 import '../../../../core/widgets/loading_widget.dart';
 import '../../domain/entities/player.dart';
+import '../../../statistics/presentation/widgets/player_statistics_panel.dart';
 import '../providers/player_provider.dart';
 import '../widgets/stats_card.dart';
 
@@ -325,6 +326,8 @@ class _PlayerDetailScreenState extends ConsumerState<PlayerDetailScreen>
           ),
           const SizedBox(height: 14),
         ],
+        PlayerStatisticsPanel(playerId: player.id),
+        const SizedBox(height: 14),
 
         // Batting Key Stats Grid
         GridView.count(

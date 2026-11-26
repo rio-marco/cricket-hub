@@ -99,7 +99,7 @@ describe('player controller', () => {
     expect(teams.body.data).toEqual([{ _id: 't1' }]);
     expect(matches.status).toBe(200);
     expect(matches.body.pagination.totalPages).toBe(1);
-    expect(playerService.getPlayerStats).toHaveBeenCalledWith('p1');
+    expect(playerService.getPlayerStats).toHaveBeenCalledWith('p1', {});
     expect(playerService.getPlayerTeams).toHaveBeenCalledWith('p1');
     expect(playerService.getPlayerMatches).toHaveBeenCalledWith(
       'p1',

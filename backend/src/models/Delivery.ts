@@ -195,6 +195,8 @@ deliverySchema.index({ innings: 1, overNumber: 1, ballNumber: 1 });
 deliverySchema.index({ match: 1, isUndone: 1 });
 deliverySchema.index({ batter: 1, match: 1 });
 deliverySchema.index({ bowler: 1, match: 1 });
+deliverySchema.index({ isUndone: 1, 'wicket.fielder': 1, 'wicket.type': 1 });
+deliverySchema.index({ isUndone: 1, match: 1, 'wicket.fielder': 1 });
 
 export const Delivery = mongoose.model<IDelivery, DeliveryModel>('Delivery', deliverySchema);
 

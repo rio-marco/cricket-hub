@@ -1,8 +1,10 @@
 import { Types } from 'mongoose';
 
 import {
+  InningsStatus,
   MatchFormat,
   MatchStatus,
+  ResultType,
   TeamMemberRole,
   TeamMemberStatus,
 } from '../../src/constants/enums';
@@ -118,7 +120,8 @@ describe('MongoDB integration: players', () => {
       teamB: team._id,
       format: MatchFormat.T20,
       totalOvers: 20,
-      status: MatchStatus.UPCOMING,
+      status: MatchStatus.COMPLETED,
+      result: { resultType: ResultType.RUNS },
       playingXI_A: [player._id],
       playingXI_B: [],
     });
@@ -127,6 +130,7 @@ describe('MongoDB integration: players', () => {
       inningsNumber: 1,
       battingTeam: team._id,
       bowlingTeam: team._id,
+      status: InningsStatus.COMPLETED,
       battingStats: [
         {
           player: player._id,

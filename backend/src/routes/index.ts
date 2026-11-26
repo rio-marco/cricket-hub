@@ -8,6 +8,8 @@ import matchRoutes from './match.routes';
 import scoringRoutes from './scoring.routes';
 import auctionRoutes from './auction.routes';
 import notificationRoutes from './notification.routes';
+import statisticsRoutes from './statistics.routes';
+import leaderboardRoutes from './leaderboard.routes';
 import { ApiResponse } from '../utils/apiResponse';
 
 const router = Router();
@@ -34,5 +36,7 @@ router.use('/matches', matchRoutes);
 router.use('/scoring', scoringRoutes);
 router.use('/auctions', auctionRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/statistics', statisticsRoutes);
+router.use('/leaderboards', leaderboardRoutes);
 
 export default router;

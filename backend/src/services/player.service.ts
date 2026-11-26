@@ -16,6 +16,7 @@ import {
 } from '../constants/enums';
 import { UserRole } from '../constants/roles';
 import { getPaginationParams, IPaginationMeta, buildPaginationResponse } from '../utils/pagination';
+import playerStatisticsService, { StatisticsFilters } from './playerStatistics.service';
 
 export interface ICreatePlayerData {
   playingRole: PlayingRole;
@@ -254,7 +255,14 @@ export class PlayerService {
   /**
    * Calculate detailed career statistics (batting, bowling, fielding) from match innings
    */
-  public async getPlayerStats(playerId: string | Types.ObjectId): Promise<any> {
+  public async getPlayerStats(
+    playerId: string | Types.ObjectId,
+    filters: StatisticsFilters = {}
+  ): Promise<any> {
+    return playerStatisticsService.getPlayerStatistics(playerId, filters);
+  }
+
+  private async legacyGetPlayerStats(playerId: string | Types.ObjectId): Promise<any> {
     if (!mongoose.Types.ObjectId.isValid(playerId.toString())) {
       throw ApiError.badRequest('Invalid player ID format.');
     }

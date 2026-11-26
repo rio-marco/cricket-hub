@@ -119,6 +119,16 @@ class ApiEndpoints {
   static const String topBowlers = '/statistics/top-bowlers';
   static String tournamentStatistics(String tournamentId) =>
       '/statistics/tournament/$tournamentId';
+  static String playerStatistics(String playerId, String section) =>
+      '/statistics/players/$playerId/$section';
+  static String playerOverallStatistics(String playerId) =>
+      playerStatistics(playerId, 'overall');
+  static String playerBattingStatistics(String playerId) =>
+      playerStatistics(playerId, 'batting');
+  static String playerBowlingStatistics(String playerId) =>
+      playerStatistics(playerId, 'bowling');
+  static String playerFieldingStatistics(String playerId) =>
+      playerStatistics(playerId, 'fielding');
 
   // ---------------------------------------------------------------------------
   // Auctions
@@ -163,6 +173,7 @@ class ApiEndpoints {
   static const String bowlerLeaderboard = '/leaderboards/bowlers';
   static const String teamLeaderboard = '/leaderboards/teams';
   static const String mvpLeaderboard = '/leaderboards/mvp';
+  static String leaderboardByMetric(String metric) => '/leaderboards/$metric';
 
   // ---------------------------------------------------------------------------
   // Notifications & Device Registration

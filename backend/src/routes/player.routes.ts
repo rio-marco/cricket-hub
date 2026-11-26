@@ -17,6 +17,7 @@ import {
   updatePlayerSchema,
   searchPlayerSchema,
 } from '../validators/player.validator';
+import { playerStatisticsQuerySchema } from '../validators/statistics.validator';
 
 const router = Router();
 
@@ -33,7 +34,7 @@ router.put('/:id', protect, validate(updatePlayerSchema, 'body'), updatePlayer);
 router.delete('/:id', protect, deletePlayer);
 
 // Player details: statistics, teams, and matches
-router.get('/:id/stats', getPlayerStats);
+router.get('/:id/stats', validate(playerStatisticsQuerySchema, 'query'), getPlayerStats);
 router.get('/:id/teams', getPlayerTeams);
 router.get('/:id/matches', getPlayerMatches);
 

@@ -140,6 +140,20 @@ export const AUCTION_MESSAGES = {
   TEAM_SLOTS_FULL: 'Team squad limit has already been reached.',
 };
 
+export const STATISTICS_MESSAGES = {
+  FETCHED: 'Player statistics retrieved successfully.',
+  BATTING_FETCHED: 'Batting statistics retrieved successfully.',
+  BOWLING_FETCHED: 'Bowling statistics retrieved successfully.',
+  FIELDING_FETCHED: 'Fielding statistics retrieved successfully.',
+  RECENT_FETCHED: 'Recent player performances retrieved successfully.',
+  BREAKDOWN_FETCHED: 'Player statistics breakdown retrieved successfully.',
+  TOP_BATSMEN_FETCHED: 'Top batsmen retrieved successfully.',
+  TOP_BOWLERS_FETCHED: 'Top bowlers retrieved successfully.',
+  OVERVIEW_FETCHED: 'Statistics overview retrieved successfully.',
+  TOURNAMENT_FETCHED: 'Tournament statistics retrieved successfully.',
+  LEADERBOARD_FETCHED: 'Leaderboard retrieved successfully.',
+};
+
 export const NOTIFICATION_MESSAGES = {
   FETCHED: 'Notifications retrieved successfully.',
   UNREAD_COUNT_FETCHED: 'Unread notification count retrieved successfully.',
@@ -175,6 +189,7 @@ export const MESSAGES = {
   MATCH: MATCH_MESSAGES,
   SCORING: SCORING_MESSAGES,
   AUCTION: AUCTION_MESSAGES,
+  STATISTICS: STATISTICS_MESSAGES,
   NOTIFICATION: NOTIFICATION_MESSAGES,
   COMMON: COMMON_MESSAGES,
 };

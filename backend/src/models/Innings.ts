@@ -295,6 +295,9 @@ const inningsSchema = new Schema<IInnings, InningsModel>(
 
 // Compound unique index ensuring only one record per innings per match
 inningsSchema.index({ match: 1, inningsNumber: 1 }, { unique: true });
+inningsSchema.index({ match: 1, status: 1 });
+inningsSchema.index({ status: 1, 'battingStats.player': 1 });
+inningsSchema.index({ status: 1, 'bowlingStats.player': 1 });
 
 export const Innings = mongoose.model<IInnings, InningsModel>('Innings', inningsSchema);
 

@@ -202,6 +202,8 @@ const matchSchema = new Schema<IMatch, MatchModel>(
 matchSchema.index({ tournament: 1, status: 1 });
 matchSchema.index({ teamA: 1, teamB: 1, matchDate: -1 });
 matchSchema.index({ status: 1, matchDate: 1 });
+matchSchema.index({ status: 1, 'result.resultType': 1, matchDate: -1 });
+matchSchema.index({ tournament: 1, format: 1, matchDate: -1 });
 
 export const Match = mongoose.model<IMatch, MatchModel>('Match', matchSchema);
 
