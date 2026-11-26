@@ -187,4 +187,56 @@ class ApiEndpoints {
   static const String registerPushToken = '/notifications/device-token';
   static const String removePushToken = '/notifications/device-token';
   static const String listPushTokens = '/notifications/device-tokens';
+
+  // ---------------------------------------------------------------------------
+  // Administration
+  // ---------------------------------------------------------------------------
+  static const String adminLogin = '/admin/auth/login';
+  static const String adminDashboard = '/admin/dashboard';
+
+  static const String adminUsers = '/admin/users';
+  static String adminUserById(String id) => '/admin/users/$id';
+  static String adminUserStatus(String id) => '/admin/users/$id/status';
+  static String adminUserRole(String id) => '/admin/users/$id/role';
+
+  static const String adminTeams = '/admin/teams';
+  static String adminTeamById(String id) => '/admin/teams/$id';
+  static String adminTeamStatus(String id) => '/admin/teams/$id/status';
+
+  static const String adminPlayers = '/admin/players';
+  static String adminPlayerById(String id) => '/admin/players/$id';
+
+  static const String adminTournaments = '/admin/tournaments';
+  static String adminTournamentById(String id) => '/admin/tournaments/$id';
+  static String adminTournamentStatus(String id) => '/admin/tournaments/$id/status';
+  static String adminTournamentTeamDecision(String tournamentId, String teamId) =>
+      '/admin/tournaments/$tournamentId/teams/$teamId/decision';
+
+  static const String adminMatches = '/admin/matches';
+  static String adminMatchById(String id) => '/admin/matches/$id';
+  static String adminMatchScorecard(String id) => '/admin/matches/$id/scorecard';
+  static String adminMatchEvents(String id) => '/admin/matches/$id/events';
+  static String adminMatchStatus(String id) => '/admin/matches/$id/status';
+  static String adminMatchCorrections(String id) =>
+      '/admin/matches/$id/corrections';
+
+  static const String adminAuctions = '/admin/auctions';
+  static String adminAuctionById(String id) => '/admin/auctions/$id';
+  static String adminAuctionBids(String id) => '/admin/auctions/$id/bids';
+  static String adminAuctionAudit(String id) => '/admin/auctions/$id/audit';
+  static String adminAuctionSuspicious(String id) =>
+      '/admin/auctions/$id/suspicious';
+
+  static const String adminNotificationBroadcast =
+      '/admin/notifications/broadcast';
+  static const String adminNotificationUsers = '/admin/notifications/users';
+  static const String adminNotificationDeliveries =
+      '/admin/notifications/deliveries';
+
+  static const String adminReports = '/admin/reports';
+  static const String adminReportsExport = '/admin/reports/export';
+
+  static const String adminAudits = '/admin/audits';
+  static const String adminAuditsScoring = '/admin/audits/scoring';
+  static const String adminAuditsAuction = '/admin/audits/auction';
 }

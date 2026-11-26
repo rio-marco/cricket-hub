@@ -1,30 +1,26 @@
 import { Router } from 'express';
-import {
-  getAllUsers,
-  getUserById,
-  updateUser,
-  blockUser,
-  deleteUser,
-  getDashboardStats,
-} from '../controllers/user.controller';
+import * as adminController from '../controllers/admin.controller';
 import { protect } from '../middlewares/auth.middleware';
 import { authorize } from '../middlewares/authorize.middleware';
+import { validate } from '../middlewares/validate.middleware';
 import { UserRole } from '../constants/roles';
+import {
+  adminIdParamSchema,
+  legacyBlockUserSchema,
+  legacyUpdateUserSchema,
+} from '../validators/admin.validator';
 
 const router = Router();
 
-// Protect all user management routes and restrict to ADMIN role
 router.use(protect);
 router.use(authorize(UserRole.ADMIN));
 
-// Admin dashboard summary statistics (Placed before /:id parameter)
-router.get('/dashboard/stats', getDashboardStats);
+router.get('/dashboard/stats', adminController.legacyGetDashboardStats);
 
-// User CRUD & Management
-router.get('/', getAllUsers);
-router.get('/:id', getUserById);
-router.put('/:id', updateUser);
-router.put('/:id/block', blockUser);
-router.delete('/:id', deleteUser);
+router.get('/', adminController.legacyGetAllUsers);
+router.get('/:id', validate(adminIdParamSchema, 'params'), adminController.legacyGetUserById);
+router.put('/:id', validate(adminIdParamSchema, 'params'), validate(legacyUpdateUserSchema), adminController.legacyUpdateUser);
+router.put('/:id/block', validate(adminIdParamSchema, 'params'), validate(legacyBlockUserSchema), adminController.legacyBlockUser);
+router.delete('/:id', validate(adminIdParamSchema, 'params'), adminController.legacyDeleteUser);
 
 export default router;

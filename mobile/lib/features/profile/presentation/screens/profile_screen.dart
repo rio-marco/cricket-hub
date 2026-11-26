@@ -5,8 +5,6 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/widgets/app_button.dart';
-import '../../../../core/widgets/app_card.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../players/presentation/providers/player_provider.dart';
 import '../../../teams/presentation/providers/team_provider.dart';
@@ -92,6 +90,7 @@ class ProfileScreen extends ConsumerWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     final user = ref.watch(currentUserProvider);
+    final isAdmin = ref.watch(isAdminProvider);
     final playerProfileAsync = ref.watch(myPlayerProfileProvider);
     final myTeamsState = ref.watch(myTeamsProvider);
 
@@ -124,7 +123,7 @@ class ProfileScreen extends ConsumerWidget {
                   const SizedBox(height: 20),
 
                   // 4. ACCOUNT & SETTINGS LIST
-                  _buildSettingsSection(context, ref, isDark),
+                  _buildSettingsSection(context, ref, isDark, isAdmin),
                   const SizedBox(height: 32),
                 ],
               ),
@@ -474,6 +473,7 @@ class ProfileScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     bool isDark,
+    bool isAdmin,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -497,6 +497,16 @@ class ProfileScreen extends ConsumerWidget {
           ),
           child: Column(
             children: [
+              if (isAdmin) ...[
+                _buildSettingTile(
+                  icon: Icons.admin_panel_settings_outlined,
+                  title: 'Admin Console',
+                  subtitle: 'Manage users, competitions and audit trails',
+                  isDark: isDark,
+                  onTap: () => context.go(AppRoutes.adminShell),
+                ),
+                _buildDivider(isDark),
+              ],
               _buildSettingTile(
                 icon: Icons.notifications_outlined,
                 title: 'Notifications',

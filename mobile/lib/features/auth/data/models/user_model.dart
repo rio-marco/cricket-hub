@@ -10,6 +10,7 @@ class UserModel extends User {
     super.avatar,
     super.role = 'user',
     super.isVerified = false,
+    super.isBlocked,
     super.createdAt,
   });
 
@@ -26,8 +27,11 @@ class UserModel extends User {
       email: map['email'] as String? ?? '',
       phone: map['phone'] as String?,
       avatar: map['avatar'] as String?,
-      role: map['role'] as String? ?? 'user',
-      isVerified: map['isVerified'] as bool? ?? map['is_verified'] as bool? ?? false,
+      role: parseUserRole(map['role']),
+      isVerified: parseUserBool(map['isVerified'] ?? map['is_verified']) ?? false,
+      isBlocked: parseUserBool(
+        map['isBlocked'] ?? map['is_blocked'] ?? map['blocked'],
+      ),
       createdAt: map['createdAt'] != null
           ? (map['createdAt'] is DateTime
               ? map['createdAt'] as DateTime
@@ -48,6 +52,7 @@ class UserModel extends User {
       avatar: entity.avatar,
       role: entity.role,
       isVerified: entity.isVerified,
+      isBlocked: entity.isBlocked,
       createdAt: entity.createdAt,
     );
   }
@@ -56,14 +61,8 @@ class UserModel extends User {
   @override
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
-      'name': name,
-      'email': email,
-      if (phone != null) 'phone': phone,
-      if (avatar != null) 'avatar': avatar,
-      'role': role,
-      'isVerified': isVerified,
-      if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+      ...super.toJson(),
+      if (isBlocked != null) 'isBlocked': isBlocked,
     };
   }
 
@@ -77,6 +76,7 @@ class UserModel extends User {
       avatar: avatar,
       role: role,
       isVerified: isVerified,
+      isBlocked: isBlocked,
       createdAt: createdAt,
     );
   }
@@ -90,7 +90,9 @@ class UserModel extends User {
     String? avatar,
     String? role,
     bool? isVerified,
+    bool? isBlocked,
     DateTime? createdAt,
+    bool clearIsBlocked = false,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -100,6 +102,7 @@ class UserModel extends User {
       avatar: avatar ?? this.avatar,
       role: role ?? this.role,
       isVerified: isVerified ?? this.isVerified,
+      isBlocked: clearIsBlocked ? null : isBlocked ?? this.isBlocked,
       createdAt: createdAt ?? this.createdAt,
     );
   }

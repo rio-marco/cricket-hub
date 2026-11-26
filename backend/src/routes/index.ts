@@ -10,6 +10,7 @@ import auctionRoutes from './auction.routes';
 import notificationRoutes from './notification.routes';
 import statisticsRoutes from './statistics.routes';
 import leaderboardRoutes from './leaderboard.routes';
+import adminRoutes from './admin.routes';
 import { ApiResponse } from '../utils/apiResponse';
 
 const router = Router();
@@ -38,5 +39,6 @@ router.use('/auctions', auctionRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/statistics', statisticsRoutes);
 router.use('/leaderboards', leaderboardRoutes);
+router.use('/admin', adminRoutes);
 
 export default router;

@@ -36,6 +36,17 @@ import '../../features/auction/presentation/screens/auction_bidding_screen.dart'
 import '../../features/notifications/presentation/screens/notifications_screen.dart';
 import '../../features/statistics/presentation/screens/statistics_screen.dart';
 import '../../features/statistics/presentation/screens/leaderboard_screen.dart';
+import '../../features/admin/presentation/screens/admin_shell_screen.dart';
+import '../../features/admin/presentation/screens/admin_dashboard_screen.dart';
+import '../../features/admin/presentation/screens/admin_users_screen.dart';
+import '../../features/admin/presentation/screens/admin_teams_screen.dart';
+import '../../features/admin/presentation/screens/admin_players_screen.dart';
+import '../../features/admin/presentation/screens/admin_tournaments_screen.dart';
+import '../../features/admin/presentation/screens/admin_matches_screen.dart';
+import '../../features/admin/presentation/screens/admin_auctions_screen.dart';
+import '../../features/admin/presentation/screens/admin_notifications_screen.dart';
+import '../../features/admin/presentation/screens/admin_reports_screen.dart';
+import '../../features/admin/presentation/screens/admin_audits_screen.dart';
 
 import '../widgets/bottom_nav_bar.dart';
 
@@ -81,6 +92,18 @@ class AppRoutes {
   static const String leaderboard = '/leaderboard';
   static const String notifications = '/notifications';
   static const String settings = '/settings';
+
+  static const String adminShell = '/admin';
+  static const String adminDashboard = '/admin/dashboard';
+  static const String adminUsers = '/admin/users';
+  static const String adminTeams = '/admin/teams';
+  static const String adminPlayers = '/admin/players';
+  static const String adminTournaments = '/admin/tournaments';
+  static const String adminMatches = '/admin/matches';
+  static const String adminAuctions = '/admin/auctions';
+  static const String adminNotifications = '/admin/notifications';
+  static const String adminReports = '/admin/reports';
+  static const String adminAudits = '/admin/audits';
 }
 
 // -----------------------------------------------------------------------------
@@ -129,6 +152,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           (location == AppRoutes.login ||
               location == AppRoutes.register ||
               location == AppRoutes.splash)) {
+        return AppRoutes.home;
+      }
+
+      if (isAuth && location.startsWith(AppRoutes.adminShell) && !ref.read(isAdminProvider)) {
         return AppRoutes.home;
       }
 
@@ -193,6 +220,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         navigatorKey: shellNavigatorKey,
         builder: (context, state, child) {
           final currentPath = state.uri.path;
+          final isAdmin = ref.read(isAdminProvider);
           int currentIndex = 0;
           if (currentPath.startsWith(AppRoutes.home)) {
             currentIndex = 0;
@@ -204,6 +232,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             currentIndex = 3;
           } else if (currentPath.startsWith(AppRoutes.profile)) {
             currentIndex = 4;
+          } else if (currentPath.startsWith(AppRoutes.adminShell)) {
+            currentIndex = 5;
           }
 
           return Scaffold(
@@ -227,8 +257,12 @@ final routerProvider = Provider<GoRouter>((ref) {
                   case 4:
                     context.go(AppRoutes.profile);
                     break;
+                  case 5:
+                    context.go(AppRoutes.adminShell);
+                    break;
                 }
               },
+              isAdmin: isAdmin,
             ),
           );
         },
@@ -407,6 +441,63 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.settings,
         name: 'settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+
+      // Admin Routes
+      GoRoute(
+        path: AppRoutes.adminShell,
+        name: 'adminShell',
+        builder: (context, state) => const AdminShellScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminDashboard,
+        name: 'adminDashboard',
+        builder: (context, state) => const AdminDashboardScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminUsers,
+        name: 'adminUsers',
+        builder: (context, state) => const AdminUsersScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminTeams,
+        name: 'adminTeams',
+        builder: (context, state) => const AdminTeamsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminPlayers,
+        name: 'adminPlayers',
+        builder: (context, state) => const AdminPlayersScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminTournaments,
+        name: 'adminTournaments',
+        builder: (context, state) => const AdminTournamentsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminMatches,
+        name: 'adminMatches',
+        builder: (context, state) => const AdminMatchesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminAuctions,
+        name: 'adminAuctions',
+        builder: (context, state) => const AdminAuctionsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminNotifications,
+        name: 'adminNotifications',
+        builder: (context, state) => const AdminNotificationsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminReports,
+        name: 'adminReports',
+        builder: (context, state) => const AdminReportsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminAudits,
+        name: 'adminAudits',
+        builder: (context, state) => const AdminAuditsScreen(),
       ),
     ],
   );

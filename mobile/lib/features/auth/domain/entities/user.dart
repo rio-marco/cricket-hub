@@ -7,6 +7,7 @@ class User {
   final String? avatar;
   final String role;
   final bool isVerified;
+  final bool? isBlocked;
   final DateTime? createdAt;
 
   const User({
@@ -17,6 +18,7 @@ class User {
     this.avatar,
     this.role = 'user',
     this.isVerified = false,
+    this.isBlocked,
     this.createdAt,
   });
 
@@ -28,8 +30,11 @@ class User {
       email: json['email'] as String? ?? '',
       phone: json['phone'] as String?,
       avatar: json['avatar'] as String?,
-      role: json['role'] as String? ?? 'user',
-      isVerified: json['isVerified'] as bool? ?? false,
+      role: parseUserRole(json['role']),
+      isVerified: parseUserBool(json['isVerified'] ?? json['is_verified']) ?? false,
+      isBlocked: parseUserBool(
+        json['isBlocked'] ?? json['is_blocked'] ?? json['blocked'],
+      ),
       createdAt: json['createdAt'] != null
           ? (json['createdAt'] is DateTime
               ? json['createdAt'] as DateTime
@@ -48,6 +53,7 @@ class User {
       if (avatar != null) 'avatar': avatar,
       'role': role,
       'isVerified': isVerified,
+      if (isBlocked != null) 'isBlocked': isBlocked,
       if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
     };
   }
@@ -61,7 +67,9 @@ class User {
     String? avatar,
     String? role,
     bool? isVerified,
+    bool? isBlocked,
     DateTime? createdAt,
+    bool clearIsBlocked = false,
   }) {
     return User(
       id: id ?? this.id,
@@ -71,6 +79,7 @@ class User {
       avatar: avatar ?? this.avatar,
       role: role ?? this.role,
       isVerified: isVerified ?? this.isVerified,
+      isBlocked: clearIsBlocked ? null : isBlocked ?? this.isBlocked,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -86,7 +95,12 @@ class User {
   }
 
   /// Whether the user is an administrator
-  bool get isAdmin => role.toLowerCase() == 'admin';
+  bool get isAdmin {
+    final normalized = role.trim().replaceAll('-', '_').replaceAll(' ', '_').toUpperCase();
+    return normalized == 'ADMIN' ||
+        normalized == 'ROLE_ADMIN' ||
+        normalized.endsWith('_ADMIN');
+  }
 
   @override
   bool operator ==(Object other) =>
@@ -100,6 +114,7 @@ class User {
           avatar == other.avatar &&
           role == other.role &&
           isVerified == other.isVerified &&
+          isBlocked == other.isBlocked &&
           createdAt == other.createdAt;
 
   @override
@@ -111,10 +126,35 @@ class User {
       avatar.hashCode ^
       role.hashCode ^
       isVerified.hashCode ^
+      (isBlocked?.hashCode ?? 0) ^
       createdAt.hashCode;
 
   @override
   String toString() {
-    return 'User(id: $id, name: $name, email: $email, phone: $phone, role: $role, isVerified: $isVerified)';
+    return 'User(id: $id, name: $name, email: $email, phone: $phone, role: $role, isVerified: $isVerified, isBlocked: $isBlocked)';
   }
+}
+
+bool? parseUserBool(dynamic value) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  if (value is String) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized == 'true' || normalized == '1' || normalized == 'yes') {
+      return true;
+    }
+    if (normalized == 'false' || normalized == '0' || normalized == 'no') {
+      return false;
+    }
+  }
+  return null;
+}
+
+String parseUserRole(dynamic value) {
+  if (value is String && value.trim().isNotEmpty) return value.trim();
+  if (value is Map) {
+    final nested = value['role'] ?? value['name'] ?? value['value'];
+    if (nested is String && nested.trim().isNotEmpty) return nested.trim();
+  }
+  return 'user';
 }

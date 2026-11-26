@@ -320,3 +320,8 @@ final isAuthenticatedProvider = Provider<bool>((ref) {
   final authState = ref.watch(authStateProvider);
   return authState is Authenticated;
 });
+
+/// True if the authenticated user has an administrator role.
+final isAdminProvider = Provider<bool>((ref) {
+  return ref.watch(currentUserProvider)?.isAdmin ?? false;
+});

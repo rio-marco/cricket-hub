@@ -687,6 +687,96 @@
   - `backend/tests/integration/players.integration.test.ts`
   - `mobile/lib/core/constants/api_endpoints.dart`
   - `mobile/lib/core/routing/app_router.dart`
-  - `mobile/lib/features/players/presentation/screens/player_detail_screen.dart`
-  - `mobile/test/integration/backend_integration_test.dart`
+   - `mobile/lib/features/players/presentation/screens/player_detail_screen.dart`
+   - `mobile/test/integration/backend_integration_test.dart`
+   - `docs/PROGRESS.md`
+
+## PHASE 13: COMPREHENSIVE ADMIN MANAGEMENT ✅
+### 1. Backend Authorization & Audit Foundation
+- [x] Added centralized admin permissions, actions, role mapping, and role helpers in `backend/src/constants/admin.ts`
+- [x] Added reusable `authorizeAdmin(permission?)` middleware with JWT authentication, admin-role enforcement, and granular permission checks
+- [x] Added dedicated `adminLimiter` rate limiter for admin endpoints and reused `authLimiter` for admin login
+- [x] Added `AdminAudit` MongoDB model with indexed admin/action/target/date queries
+- [x] Added audit redaction for password, OTP, token, refresh token, FCM token, secret, JWT, authorization, cookie, and nested sensitive fields
+- [x] Added audited admin service that records admin id, role, action, target, before/after values, reason, metadata, IP address, and user agent
+- [x] Rejected unverified and non-admin users from admin login and all admin APIs on the backend, not only in the UI
+- [x] Preserved the existing `ADMIN` role and kept the permission map extensible without adding an unused super-admin role
+
+### 2. Backend Admin APIs
+- [x] Added `POST /api/v1/admin/auth/login` for audited, rate-limited administrator login
+- [x] Added `GET /api/v1/admin/dashboard` for platform counts, activity summaries, and recent audit entries
+- [x] Added user management endpoints for paginated search, detail lookup, status changes, role changes, and audited updates
+- [x] Added team management endpoints for list/detail views and active-status moderation using existing team data
+- [x] Added player management endpoints for list/detail views and backend-authoritative player statistics lookup
+- [x] Added tournament management endpoints for list/detail views, status changes, and tournament-team decisions
+- [x] Added match management endpoints for list/detail views, scorecard/events inspection, status changes, and reasoned scoring corrections
+- [x] Added auction monitoring endpoints for auctions, bids, audit history, and suspicious-activity heuristics without auction mutation
+- [x] Added notification endpoints for broadcast delivery, per-user delivery inspection, and delivery-status monitoring
+- [x] Added reporting endpoints for platform summaries and CSV export
+- [x] Added audit endpoints for general admin actions, scoring corrections, and auction audit history
+- [x] Added Joi validation for object IDs, booleans, dates, status values, pagination, search text, and correction reasons
+- [x] Capped paginated admin queries at 100 records per request
+- [x] Kept legacy `GET/PUT /api/v1/users` and related admin-only user routes working by delegating them to audited admin handlers
+- [x] Ensured scoring corrections require a reason and delegate to the existing authoritative scoring path instead of silently rewriting historical data
+
+### 3. Flutter Admin UI
+- [x] Added admin endpoint helpers to `mobile/lib/core/constants/api_endpoints.dart`
+- [x] Added `isBlocked` parsing to auth user entity/model and an `isAdminProvider` derived from authenticated user data
+- [x] Added a complete role-gated admin feature under `mobile/lib/features/admin/` with datasource, repository, Riverpod providers, entities, screens, and widgets
+- [x] Added admin shell, dashboard, users, teams, players, tournaments, matches, auctions, notifications, reports, and audits screens backed by real admin APIs
+- [x] Added role-aware GoRouter admin routes and redirects so unauthenticated users go to login and non-admins cannot open admin pages
+- [x] Added an Admin entry to the profile screen for admins and a role-aware Admin tab in bottom navigation
+- [x] Preserved existing non-admin user screens and Flutter Riverpod 2.6.1 without adding dependencies
+
+### 4. Phase 13 Tests
+- [x] Added backend admin validator, middleware, and audit/redaction unit tests
+- [x] Added real-MongoDB admin integration tests covering login denial, dashboard authorization, legacy audited user routes, scoring-correction validation, read-only auction monitoring, and audit redaction
+- [x] Added Flutter admin feature tests covering authentication routing, dashboard loading, API failures, audited actions, and admin-only navigation
+- [x] Extended auth parsing tests for blocked/admin user flags and admin provider behavior
+
+### 5. Phase 13 Verification
+- [x] `npm run lint` passed
+- [x] `npm test` passed: 16 suites, 65 tests
+- [x] `npm run test:integration` passed: 14 suites, 68 tests (local MongoDB replica set)
+- [x] `flutter analyze --no-fatal-infos --no-fatal-warnings` passed with 0 errors; remaining lints/deprecations are non-fatal
+- [x] `flutter test` passed: 51 tests, including the real host-backend integration flow on port 5001
+- [x] `git diff --check` passed
+
+### 6. Phase 13 Files Changed
+- Added:
+  - `backend/src/constants/admin.ts`
+  - `backend/src/controllers/admin.controller.ts`
+  - `backend/src/middlewares/admin.middleware.ts`
+  - `backend/src/models/AdminAudit.ts`
+  - `backend/src/routes/admin.routes.ts`
+  - `backend/src/services/admin.service.ts`
+  - `backend/src/services/adminAudit.service.ts`
+  - `backend/src/validators/admin.validator.ts`
+  - `backend/src/middlewares/__tests__/admin.middleware.test.ts`
+  - `backend/src/services/__tests__/adminAudit.service.test.ts`
+  - `backend/src/validators/__tests__/admin.validator.test.ts`
+  - `backend/tests/integration/admin.integration.test.ts`
+  - `mobile/lib/features/admin/`
+  - `mobile/test/features/admin/admin_feature_test.dart`
+- Modified:
+  - `backend/src/middlewares/rateLimiter.middleware.ts`
+  - `backend/src/routes/index.ts`
+  - `backend/src/routes/user.routes.ts`
+  - `backend/tests/integration/setup.ts`
+  - `mobile/lib/core/constants/api_endpoints.dart`
+  - `mobile/lib/core/routing/app_router.dart`
+  - `mobile/lib/core/widgets/bottom_nav_bar.dart`
+  - `mobile/lib/features/auth/data/models/user_model.dart`
+  - `mobile/lib/features/auth/domain/entities/user.dart`
+  - `mobile/lib/features/auth/presentation/providers/auth_provider.dart`
+  - `mobile/lib/features/profile/presentation/screens/profile_screen.dart`
   - `docs/PROGRESS.md`
+
+### 7. Remaining Production Risks & Limitations
+- [x] Only the existing `ADMIN` role is supported; add role definitions and permission mappings before introducing super-admin or staff roles
+- [x] There is no user-report or moderation case model yet, so report handling is limited to existing platform activity and status metadata
+- [x] Team moderation can only activate/deactivate teams because no dedicated reported/inappropriate flag exists
+- [x] Player profiles are admin-viewable but not mutable beyond data available through existing authoritative player and statistics flows
+- [x] Match correction requires a reason and uses the existing authoritative scoring path; unsupported historical edits are rejected instead of silently applied
+- [x] Auction monitoring is intentionally read-only and heuristic-based; do not add auction mutation without a separate audit and authorization design
+- [x] Socket.IO rooms and published-event de-duplication remain process-local; use a Redis adapter and shared de-duplication before running multiple backend instances

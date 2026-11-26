@@ -22,11 +22,13 @@ class BottomNavItem {
 class CricketBottomNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
+  final bool isAdmin;
 
   const CricketBottomNavBar({
     super.key,
     required this.currentIndex,
     required this.onTap,
+    this.isAdmin = false,
   });
 
   static const List<BottomNavItem> items = [
@@ -57,10 +59,17 @@ class CricketBottomNavBar extends StatelessWidget {
     ),
   ];
 
+  static const BottomNavItem adminItem = BottomNavItem(
+    label: 'Admin',
+    icon: Icons.admin_panel_settings_outlined,
+    selectedIcon: Icons.admin_panel_settings_rounded,
+  );
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final navItems = <BottomNavItem>[...items, if (isAdmin) adminItem];
 
     return Container(
       decoration: BoxDecoration(
@@ -87,7 +96,7 @@ class CricketBottomNavBar extends StatelessWidget {
         height: 68,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         indicatorColor: AppColors.primary.withOpacity(isDark ? 0.22 : 0.12),
-        destinations: items.map((item) {
+        destinations: navItems.map((item) {
           Widget iconWidget = Icon(
             item.icon,
             size: 24,

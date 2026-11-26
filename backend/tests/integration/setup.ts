@@ -3,6 +3,7 @@ import os from 'os';
 
 import { connectDatabase } from '../../src/config/database';
 import '../../src/models/User';
+import '../../src/models/AdminAudit';
 import '../../src/models/RefreshToken';
 import '../../src/models/Team';
 import '../../src/models/TeamMember';

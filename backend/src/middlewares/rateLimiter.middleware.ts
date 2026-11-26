@@ -47,6 +47,16 @@ export const authLimiter = rateLimit({
   skip: () => env.isTest,
 });
 
+export const adminLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: 'Too many administrative requests from this IP, please try again after 15 minutes.',
+  handler: rateLimitHandler,
+  skip: () => env.isTest,
+});
+
 export const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
@@ -74,6 +84,7 @@ export const scoringLimiter = rateLimit({
 export default {
   apiLimiter,
   authLimiter,
+  adminLimiter,
   otpLimiter,
   scoringLimiter,
 };
