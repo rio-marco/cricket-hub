@@ -9,13 +9,14 @@ import '../../../../core/errors/failures.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../data/datasources/auction_remote_datasource.dart';
-import '../../data/models/auction_json.dart';
+import '../../data/models/auction_json.dart' as auction_json;
 import '../../data/models/auction_state_model.dart';
 import '../../data/realtime/auction_realtime_client.dart';
 import '../../data/realtime/auction_realtime_event.dart';
 import '../../data/repositories/auction_repository_impl.dart';
 import '../../domain/entities/auction.dart';
 import '../../domain/entities/auction_state.dart';
+import '../../domain/entities/auction_team.dart';
 import '../../domain/repositories/auction_repository.dart';
 
 final Random _auctionRandom = Random.secure();
@@ -25,7 +26,9 @@ String newAuctionRequestKey(String action) {
       '${_auctionRandom.nextInt(1 << 30)}';
 }
 
-final auctionRemoteDataSourceProvider = Provider<AuctionRemoteDataSource>((ref) {
+final auctionRemoteDataSourceProvider = Provider<AuctionRemoteDataSource>((
+  ref,
+) {
   final apiClient = ref.watch(apiClientProvider);
   return AuctionRemoteDataSourceImpl(apiClient.dio);
 });
@@ -157,9 +160,9 @@ class AuctionsListNotifier extends StateNotifier<AuctionListState> {
 
 final auctionsListProvider =
     StateNotifierProvider<AuctionsListNotifier, AuctionListState>((ref) {
-  final repository = ref.watch(auctionRepositoryProvider);
-  return AuctionsListNotifier(repository);
-});
+      final repository = ref.watch(auctionRepositoryProvider);
+      return AuctionsListNotifier(repository);
+    });
 
 class AuctionLiveState {
   final String auctionId;
@@ -192,10 +195,12 @@ class AuctionLiveState {
       snapshot: snapshot ?? this.snapshot,
       isLoading: isLoading ?? this.isLoading,
       isSaving: isSaving ?? this.isSaving,
-      errorMessage:
-          clearErrorMessage ? null : errorMessage ?? this.errorMessage,
-      successMessage:
-          clearSuccessMessage ? null : successMessage ?? this.successMessage,
+      errorMessage: clearErrorMessage
+          ? null
+          : errorMessage ?? this.errorMessage,
+      successMessage: clearSuccessMessage
+          ? null
+          : successMessage ?? this.successMessage,
     );
   }
 }
@@ -205,7 +210,7 @@ class AuctionLiveController extends StateNotifier<AuctionLiveState> {
   final Set<String> _seenEventIds = <String>{};
 
   AuctionLiveController(this._repository, String auctionId)
-      : super(AuctionLiveState(auctionId: auctionId)) {
+    : super(AuctionLiveState(auctionId: auctionId)) {
     load();
   }
 
@@ -231,16 +236,143 @@ class AuctionLiveController extends StateNotifier<AuctionLiveState> {
     Map<String, dynamic> incomingState, {
     String message = 'Auction updated.',
   }) {
-    final incomingVersion = auctionInt(incomingState['stateVersion']);
+    final incomingVersion = auction_json.auctionInt(
+      incomingState['stateVersion'],
+    );
     final currentVersion = state.snapshot?.stateVersion ?? 0;
-    if (incomingVersion < currentVersion) return;
-    final snapshot = AuctionStateModel.fromJson(incomingState);
+    if (currentVersion > 0 && incomingVersion < currentVersion) return;
+
+    final normalized = auction_json.normalizeAuctionMap(incomingState);
+    final merged = _mergeSnapshotWithExisting(normalized);
+    final snapshot = AuctionStateModel.fromJson(merged);
     state = state.copyWith(
       snapshot: snapshot,
       isSaving: false,
       successMessage: message,
       clearErrorMessage: true,
     );
+  }
+
+  Map<String, dynamic> _mergeSnapshotWithExisting(
+    Map<String, dynamic> incoming,
+  ) {
+    final existing = state.snapshot;
+    if (existing == null) return incoming;
+
+    final merged = <String, dynamic>{...incoming};
+    final incomingCurrent = auction_json.normalizeAuctionMapOrNull(
+      incoming['currentPlayer'],
+    );
+    final existingCurrent = existing.currentPlayer;
+
+    if (incomingCurrent != null && existingCurrent != null) {
+      final incomingId =
+          (incomingCurrent['auctionPlayerId'] ??
+                  incomingCurrent['_id'] ??
+                  incomingCurrent['id'])
+              ?.toString();
+      final sameCurrent = incomingId == existingCurrent.id;
+      if (sameCurrent) {
+        void fillIfNull(String key, Object? value) {
+          if (incomingCurrent[key] == null && value != null) {
+            incomingCurrent[key] = value;
+          }
+        }
+
+        fillIfNull('currentBid', existingCurrent.currentBid);
+        fillIfNull('highestBidder', existingCurrent.highestBidder);
+        fillIfNull('highestBidderName', existingCurrent.highestBidderName);
+        fillIfNull('basePrice', existingCurrent.basePrice);
+        fillIfNull('bidCount', existingCurrent.bidCount);
+        fillIfNull('lastSequence', existingCurrent.lastSequence);
+        merged['currentPlayer'] = incomingCurrent;
+      }
+    }
+
+    final incomingTeams = auction_json.normalizeAuctionList(incoming['teams']);
+    if (incomingTeams.isEmpty && existing.teams.isNotEmpty) {
+      merged['teams'] = existing.teams
+          .map(
+            (team) => <String, dynamic>{
+              '_id': team.id,
+              'auction': team.auctionId,
+              'team': <String, dynamic>{
+                '_id': team.teamId,
+                'name': team.teamName,
+                'owner': team.ownerId,
+              },
+              'initialBudget': team.initialBudget,
+              'spent': team.spent,
+              'pendingCommitment': team.pendingCommitment,
+              'playersPurchased': team.playersPurchased,
+              'remainingBudget': team.remainingBudget,
+              'availableBudget': team.availableBudget,
+              'maxAffordableBid': team.maxAffordableBid,
+            },
+          )
+          .toList(growable: false);
+    } else if (incomingTeams.isNotEmpty && existing.teams.isNotEmpty) {
+      final existingById = <String, AuctionTeam>{
+        for (final team in existing.teams) team.teamId: team,
+      };
+      merged['teams'] = incomingTeams
+          .map((raw) {
+            final map = auction_json.normalizeAuctionMap(raw);
+            final rawTeamId = map['team'];
+            final rawTeamId2 = map['teamId'];
+            final resolvedTeamId = auction_json.auctionId(
+              rawTeamId,
+              auction_json.auctionId(rawTeamId2),
+            );
+            final prior = existingById[resolvedTeamId];
+            if (prior == null) return map;
+            map['initialBudget'] ??= prior.initialBudget;
+            map['spent'] ??= prior.spent;
+            map['pendingCommitment'] ??= prior.pendingCommitment;
+            map['remainingBudget'] ??= prior.remainingBudget;
+            map['availableBudget'] ??= prior.availableBudget;
+            map['maxAffordableBid'] ??= prior.maxAffordableBid;
+            map['playersPurchased'] ??= prior.playersPurchased;
+            return map;
+          })
+          .toList(growable: false);
+    }
+
+    final incomingPlayers = auction_json.normalizeAuctionList(
+      incoming['players'],
+    );
+    if (incomingPlayers.isEmpty && existing.players.isNotEmpty) {
+      merged['players'] = existing.players
+          .map(
+            (player) => <String, dynamic>{
+              '_id': player.id,
+              'auction': player.auctionId,
+              'player': <String, dynamic>{
+                '_id': player.playerId,
+                'name': player.playerName,
+              },
+              'basePrice': player.basePrice,
+              'soldPrice': player.soldPrice,
+              'soldTo': player.soldTo,
+              'soldAt': player.soldAt?.toIso8601String(),
+              'status': player.status,
+              'available': player.available,
+              'category': player.category,
+              'set': player.setNumber,
+              'order': player.order,
+              'currentBid': player.currentBid,
+              'highestBidder': player.highestBidder,
+              'highestBidderName': player.highestBidderName,
+              'bidCount': player.bidCount,
+              'lastSequence': player.lastSequence,
+              'decision': player.decision,
+              'version': player.version,
+            },
+          )
+          .toList(growable: false);
+    }
+
+    return merged;
   }
 
   void applyRealtimeEvent(AuctionRealtimeEvent event) {
@@ -292,10 +424,7 @@ class AuctionLiveController extends StateNotifier<AuctionLiveState> {
     }
   }
 
-  Future<bool> placeBid({
-    required String teamId,
-    double? amount,
-  }) {
+  Future<bool> placeBid({required String teamId, double? amount}) {
     return _runAction(
       () => _repository.placeBid(
         state.auctionId,
@@ -309,60 +438,81 @@ class AuctionLiveController extends StateNotifier<AuctionLiveState> {
   }
 
   Future<bool> start() {
-    return _runAction(() => _repository.startAuction(
-          state.auctionId,
-          expectedVersion: state.snapshot?.stateVersion,
-          idempotencyKey: newAuctionRequestKey('start'),
-        ), successMessage: 'Auction started.');
+    return _runAction(
+      () => _repository.startAuction(
+        state.auctionId,
+        expectedVersion: state.snapshot?.stateVersion,
+        idempotencyKey: newAuctionRequestKey('start'),
+      ),
+      successMessage: 'Auction started.',
+    );
   }
 
   Future<bool> pause() {
-    return _runAction(() => _repository.pauseAuction(
-          state.auctionId,
-          expectedVersion: state.snapshot?.stateVersion,
-          idempotencyKey: newAuctionRequestKey('pause'),
-        ), successMessage: 'Auction paused.');
+    return _runAction(
+      () => _repository.pauseAuction(
+        state.auctionId,
+        expectedVersion: state.snapshot?.stateVersion,
+        idempotencyKey: newAuctionRequestKey('pause'),
+      ),
+      successMessage: 'Auction paused.',
+    );
   }
 
   Future<bool> resume() {
-    return _runAction(() => _repository.resumeAuction(
-          state.auctionId,
-          expectedVersion: state.snapshot?.stateVersion,
-          idempotencyKey: newAuctionRequestKey('resume'),
-        ), successMessage: 'Auction resumed.');
+    return _runAction(
+      () => _repository.resumeAuction(
+        state.auctionId,
+        expectedVersion: state.snapshot?.stateVersion,
+        idempotencyKey: newAuctionRequestKey('resume'),
+      ),
+      successMessage: 'Auction resumed.',
+    );
   }
 
   Future<bool> complete() {
-    return _runAction(() => _repository.completeAuction(
-          state.auctionId,
-          expectedVersion: state.snapshot?.stateVersion,
-          idempotencyKey: newAuctionRequestKey('complete'),
-        ), successMessage: 'Auction completed.');
+    return _runAction(
+      () => _repository.completeAuction(
+        state.auctionId,
+        expectedVersion: state.snapshot?.stateVersion,
+        idempotencyKey: newAuctionRequestKey('complete'),
+      ),
+      successMessage: 'Auction completed.',
+    );
   }
 
   Future<bool> markSold() {
-    return _runAction(() => _repository.markSold(
-          state.auctionId,
-          expectedVersion: state.snapshot?.stateVersion,
-          idempotencyKey: newAuctionRequestKey('sold'),
-        ), successMessage: 'Player sold.');
+    return _runAction(
+      () => _repository.markSold(
+        state.auctionId,
+        expectedVersion: state.snapshot?.stateVersion,
+        idempotencyKey: newAuctionRequestKey('sold'),
+      ),
+      successMessage: 'Player sold.',
+    );
   }
 
   Future<bool> markUnsold({String? reason}) {
-    return _runAction(() => _repository.markUnsold(
-          state.auctionId,
-          reason: reason,
-          expectedVersion: state.snapshot?.stateVersion,
-          idempotencyKey: newAuctionRequestKey('unsold'),
-        ), successMessage: 'Player marked unsold.');
+    return _runAction(
+      () => _repository.markUnsold(
+        state.auctionId,
+        reason: reason,
+        expectedVersion: state.snapshot?.stateVersion,
+        idempotencyKey: newAuctionRequestKey('unsold'),
+      ),
+      successMessage: 'Player marked unsold.',
+    );
   }
 
   Future<bool> next() {
-    return _runAction(() => _repository.nextPlayer(
-          state.auctionId,
-          expectedVersion: state.snapshot?.stateVersion,
-          idempotencyKey: newAuctionRequestKey('next'),
-        ), successMessage: 'Next player is up for bidding.');
+    return _runAction(
+      () => _repository.nextPlayer(
+        state.auctionId,
+        expectedVersion: state.snapshot?.stateVersion,
+        idempotencyKey: newAuctionRequestKey('next'),
+      ),
+      successMessage: 'Next player is up for bidding.',
+    );
   }
 
   Future<bool> bringForward(String auctionPlayerId) {
@@ -381,6 +531,7 @@ class AuctionLiveController extends StateNotifier<AuctionLiveState> {
     Future<AuctionStateSnapshot> Function() action, {
     required String successMessage,
   }) async {
+    if (state.isSaving) return false;
     state = state.copyWith(
       isSaving: true,
       clearErrorMessage: true,
@@ -404,11 +555,15 @@ class AuctionLiveController extends StateNotifier<AuctionLiveState> {
   }
 }
 
-final auctionLiveControllerProvider = StateNotifierProvider.family<
-    AuctionLiveController, AuctionLiveState, String>((ref, auctionId) {
-  final repository = ref.watch(auctionRepositoryProvider);
-  return AuctionLiveController(repository, auctionId);
-});
+final auctionLiveControllerProvider =
+    StateNotifierProvider.family<
+      AuctionLiveController,
+      AuctionLiveState,
+      String
+    >((ref, auctionId) {
+      final repository = ref.watch(auctionRepositoryProvider);
+      return AuctionLiveController(repository, auctionId);
+    });
 
 final auctionRealtimeClientProvider = Provider<AuctionRealtimeClient>((ref) {
   final config = ref.watch(appConfigProvider);
@@ -447,16 +602,56 @@ const _auctionStateEventNames = <String>{
   'auction:completed',
 };
 
-final auctionRoomProvider = Provider.family<bool, String>((ref, auctionId) {
+final auctionRoomProvider = Provider.autoDispose.family<bool, String>((
+  ref,
+  auctionId,
+) {
   final client = ref.watch(auctionRealtimeClientProvider);
   final auth = ref.watch(authStateProvider);
   if (auth is! Authenticated) return false;
 
+  var hasConnectedBefore = client.isConnected;
+  var disposed = false;
+  var recoveryInProgress = false;
   unawaited(client.joinAuction(auctionId));
 
+  Future<void> recoverAuthoritativeState() async {
+    if (disposed || recoveryInProgress) return;
+    recoveryInProgress = true;
+    try {
+      final event = await client.syncAuction(auctionId);
+      if (disposed || event == null) return;
+      ref
+          .read(auctionLiveControllerProvider(auctionId).notifier)
+          .applyRealtimeEvent(event);
+      if (event.hasState) {
+        ref.invalidate(auctionsListProvider);
+      }
+    } finally {
+      recoveryInProgress = false;
+    }
+  }
+
   final subscription = client.events.listen((event) {
+    if (disposed) return;
     if (event.auctionId != null && event.auctionId != auctionId) return;
-    ref.read(auctionLiveControllerProvider(auctionId).notifier)
+
+    if (event.name == 'connection:status') {
+      final status = event.data['status']?.toString();
+      final connected =
+          event.data['connected'] == true || status == 'connected';
+      if (connected) {
+        unawaited(client.joinAuction(auctionId));
+        if (hasConnectedBefore) {
+          unawaited(recoverAuthoritativeState());
+        }
+        hasConnectedBefore = true;
+      }
+      return;
+    }
+
+    ref
+        .read(auctionLiveControllerProvider(auctionId).notifier)
         .applyRealtimeEvent(event);
 
     if (_auctionStateEventNames.contains(event.name)) {
@@ -465,6 +660,7 @@ final auctionRoomProvider = Provider.family<bool, String>((ref, auctionId) {
   });
 
   ref.onDispose(() {
+    disposed = true;
     subscription.cancel();
     client.leaveAuction(auctionId);
   });

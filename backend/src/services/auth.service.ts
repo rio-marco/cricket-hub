@@ -10,6 +10,7 @@ import {
   isOTPExpired,
   verifyOTPHash,
 } from '../utils/otp';
+import { sanitizeUser } from '../utils/sanitizeUser';
 import User, { IUser } from '../models/User';
 import RefreshToken from '../models/RefreshToken';
 
@@ -43,14 +44,10 @@ export interface IAuthResult {
 
 export class AuthService {
   /**
-   * Helper to strip sensitive fields (password, otp) from user object
+   * Helper to strip sensitive fields from user object
    */
   public sanitizeUser(user: any): Partial<IUser> & { _id: string } {
-    const userObj = user.toObject ? user.toObject() : { ...user };
-    delete userObj.password;
-    delete userObj.otp;
-    delete userObj.__v;
-    return userObj;
+    return sanitizeUser(user) as Partial<IUser> & { _id: string };
   }
 
   /**
@@ -163,6 +160,31 @@ export class AuthService {
   /**
    * Authenticate user with credentials, issue new token pair
    */
+  private isLoginLocked(user: any): boolean {
+    const lockUntil = user?.authLockout?.lockUntil ? new Date(user.authLockout.lockUntil).getTime() : 0;
+    return lockUntil > Date.now();
+  }
+
+  private async recordFailedLogin(user: any): Promise<void> {
+    const failedAttempts = Number(user.authLockout?.failedAttempts || 0) + 1;
+    const lockout: any = {
+      failedAttempts,
+      lastFailedAt: new Date(),
+    };
+    if (failedAttempts >= env.AUTH_LOGIN_MAX_ATTEMPTS) {
+      lockout.lockUntil = new Date(Date.now() + env.AUTH_LOGIN_LOCK_MINUTES * 60 * 1000);
+      lockout.failedAttempts = 0;
+    }
+    user.authLockout = lockout;
+    await user.save();
+  }
+
+  private async clearFailedLogin(user: any): Promise<void> {
+    if (!user.authLockout?.failedAttempts && !user.authLockout?.lockUntil) return;
+    user.authLockout = { failedAttempts: 0, lockUntil: undefined, lastFailedAt: undefined };
+    await user.save();
+  }
+
   public async login(data: ILoginData): Promise<{ user: Partial<IUser> & { _id: string }; tokens: IAuthTokens }> {
     const query: any = {};
     if (data.email) {
@@ -179,15 +201,21 @@ export class AuthService {
       throw ApiError.unauthorized(MESSAGES.AUTH.INVALID_CREDENTIALS || 'Invalid credentials.');
     }
 
+    if (this.isLoginLocked(user)) {
+      throw ApiError.tooManyRequests('Too many failed login attempts. Please try again later.');
+    }
+
     if (user.isBlocked) {
       throw ApiError.forbidden(MESSAGES.AUTH.ACCOUNT_BLOCKED || 'Your account has been suspended.');
     }
 
     const isPasswordValid = await user.comparePassword(data.password);
     if (!isPasswordValid) {
+      await this.recordFailedLogin(user);
       throw ApiError.unauthorized(MESSAGES.AUTH.INVALID_CREDENTIALS || 'Invalid credentials.');
     }
 
+    await this.clearFailedLogin(user);
     const tokens = await this.generateTokens(user);
 
     return {
@@ -474,7 +502,7 @@ export class AuthService {
   /**
    * Revoke refresh token(s) on user logout
    */
-  public async logout(userId: string, refreshTokenString?: string): Promise<{ message: string }> {
+  public async logout(userId: string, refreshTokenString?: string, fcmToken?: string): Promise<{ message: string }> {
     if (refreshTokenString) {
       await RefreshToken.updateOne(
         { token: hashRefreshToken(refreshTokenString), user: userId },
@@ -482,6 +510,23 @@ export class AuthService {
       );
     } else {
       await RefreshToken.updateMany({ user: userId }, { isRevoked: true });
+    }
+
+    const cleanedToken = typeof fcmToken === 'string' ? fcmToken.trim() : '';
+    if (cleanedToken) {
+      try {
+        const DeviceToken = (await import('../models/DeviceToken')).default;
+        const UserModel = (await import('../models/User')).default;
+        await DeviceToken.deleteOne({ user: userId, token: cleanedToken });
+        const stillActive = await DeviceToken.findOne({ user: userId, isActive: true }).sort({ updatedAt: -1 }).select('token').lean();
+        if (stillActive?.token) {
+          await UserModel.updateOne({ _id: userId }, { $set: { fcmToken: stillActive.token } });
+        } else {
+          await UserModel.updateOne({ _id: userId, fcmToken: cleanedToken }, { $unset: { fcmToken: 1 } });
+        }
+      } catch {
+        // Best-effort: logout must not fail due to push-token cleanup.
+      }
     }
 
     return {

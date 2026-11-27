@@ -4,7 +4,7 @@ import Match from '../models/Match';
 import matchService from '../services/match.service';
 import scoringService from '../services/scoring.service';
 import { logger } from '../utils/logger';
-import { socketAuth } from './auth';
+import { checkSocketRateLimit, clearSocketRateLimit } from './rateLimit';
 import {
   MATCH_EVENTS,
   scorerRoom,
@@ -65,8 +65,24 @@ const respondError = (
   ack?.({ ok: false, error });
 };
 
+const enforceSocketRateLimit = (
+  socket: MatchSocket,
+  event: string,
+  matchId: string,
+  ack?: (response: SocketAck) => void
+): boolean => {
+  const limit = checkSocketRateLimit(socket.id, { keyPrefix: `match:${event}`, windowMs: 60_000, max: 60 });
+  if (limit.allowed) return true;
+  respondError(
+    socket,
+    matchId,
+    { code: 'RATE_LIMITED', message: `Too many ${event} requests. Retry after ${Math.ceil(limit.retryAfterMs / 1000)}s.` },
+    ack
+  );
+  return false;
+};
+
 export const registerMatchHandlers = (io: MatchSocketServer): void => {
-  io.use(socketAuth);
 
   io.on('connection', (socket) => {
     const user = socket.data.user;
@@ -100,6 +116,7 @@ export const registerMatchHandlers = (io: MatchSocketServer): void => {
 
     socket.on(MATCH_EVENTS.join, async (payload, ack) => {
       const matchId = String(payload?.matchId || '');
+      if (!enforceSocketRateLimit(socket, MATCH_EVENTS.join, matchId, ack)) return;
       try {
         const access = await resolveAccess(matchId, user.id);
         await socket.join(viewerRoom(matchId));
@@ -140,6 +157,7 @@ export const registerMatchHandlers = (io: MatchSocketServer): void => {
 
     socket.on(MATCH_EVENTS.sync, async (payload, ack) => {
       const matchId = String(payload?.matchId || '');
+      if (!enforceSocketRateLimit(socket, MATCH_EVENTS.sync, matchId, ack)) return;
       try {
         const access = await resolveAccess(matchId, user.id);
         const state = await scoringService.getState(matchId);
@@ -157,6 +175,7 @@ export const registerMatchHandlers = (io: MatchSocketServer): void => {
     });
 
     socket.on('disconnect', (reason) => {
+      clearSocketRateLimit(socket.id);
       socket.data.matchRooms.clear();
       logger.info(`[Socket.IO] Client disconnected: ${socket.id} (${reason})`);
     });

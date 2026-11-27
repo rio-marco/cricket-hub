@@ -190,7 +190,10 @@ const deliverySchema = new Schema<IDelivery, DeliveryModel>(
 );
 
 // Indexes
-deliverySchema.index({ innings: 1, sequenceNumber: 1 });
+deliverySchema.index(
+  { innings: 1, sequenceNumber: 1 },
+  { unique: true, partialFilterExpression: { isUndone: false } }
+);
 deliverySchema.index({ innings: 1, overNumber: 1, ballNumber: 1 });
 deliverySchema.index({ match: 1, isUndone: 1 });
 deliverySchema.index({ batter: 1, match: 1 });

@@ -15,7 +15,7 @@ abstract class AuthRemoteDataSource {
   Future<Map<String, dynamic>> forgotPassword(String emailOrPhone);
   Future<Map<String, dynamic>> resetPassword(String userId, String otp, String newPassword);
   Future<AuthResponse> refreshToken(String token);
-  Future<void> logout([String? refreshToken]);
+  Future<void> logout({String? refreshToken, String? fcmToken});
   Future<User> getProfile();
   Future<User> updateProfile(Map<String, dynamic> data);
   Future<String> uploadAvatar(String filePath);
@@ -184,12 +184,13 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }
 
   @override
-  Future<void> logout([String? refreshToken]) async {
+  Future<void> logout({String? refreshToken, String? fcmToken}) async {
     try {
       await _dio.post(
         ApiEndpoints.logout,
         data: {
           if (refreshToken != null) 'refreshToken': refreshToken,
+          if (fcmToken != null && fcmToken.isNotEmpty) 'fcmToken': fcmToken,
         },
       );
     } catch (e) {

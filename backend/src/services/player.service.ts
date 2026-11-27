@@ -44,6 +44,10 @@ export interface IPaginatedResult<T> {
 }
 
 export class PlayerService {
+  private escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
   /**
    * Create a new player profile linked to authenticated user and update user role
    */
@@ -78,7 +82,7 @@ export class PlayerService {
     }
 
     return Player.findById(player._id)
-      .populate('user', 'name email phone avatar role')
+      .populate('user', 'name avatar role')
       .lean();
   }
 
@@ -88,7 +92,7 @@ export class PlayerService {
   public async getPlayers(
     query: Record<string, any> = {}
   ): Promise<IPaginatedResult<any>> {
-    const { page, limit, skip, sort } = getPaginationParams(query, 10, 100, '-createdAt');
+    const { page, limit, skip, sort } = getPaginationParams(query, 10, 100, '-createdAt', ['createdAt','updatedAt','jerseyNumber','city']);
 
     const filter: Record<string, any> = {};
 
@@ -105,12 +109,12 @@ export class PlayerService {
     }
 
     if (query.city) {
-      filter.city = new RegExp(String(query.city).trim(), 'i');
+      filter.city = new RegExp(this.escapeRegExp(String(query.city).trim()), 'i');
     }
 
     // Text search matching user name or player city/bio
     if (query.search) {
-      const searchRegex = new RegExp(String(query.search).trim(), 'i');
+      const searchRegex = new RegExp(this.escapeRegExp(String(query.search).trim()), 'i');
       const matchingUsers = await User.find({ name: searchRegex }).select('_id').lean();
       const userIds = matchingUsers.map((u) => u._id);
 
@@ -126,7 +130,7 @@ export class PlayerService {
         .sort(sort as any)
         .skip(skip)
         .limit(limit)
-        .populate('user', 'name email phone avatar')
+        .populate('user', 'name avatar')
         .lean(),
       Player.countDocuments(filter),
     ]);
@@ -146,7 +150,7 @@ export class PlayerService {
     }
 
     const player = await Player.findById(id)
-      .populate('user', 'name email phone avatar role isBlocked')
+      .populate('user', 'name avatar role')
       .lean();
 
     if (!player) {
@@ -199,7 +203,7 @@ export class PlayerService {
     await player.save();
 
     return Player.findById(player._id)
-      .populate('user', 'name email phone avatar')
+      .populate('user', 'name avatar')
       .lean();
   }
 
@@ -523,7 +527,7 @@ export class PlayerService {
       throw ApiError.notFound(MESSAGES.PLAYER.NOT_FOUND || 'Player profile not found.');
     }
 
-    const { page, limit, skip, sort } = getPaginationParams(query, 10, 50, '-matchDate');
+    const { page, limit, skip, sort } = getPaginationParams(query, 10, 50, '-matchDate', ['matchDate','createdAt','updatedAt','status']);
     const playerObjId = new Types.ObjectId(playerId.toString());
 
     const filter: Record<string, any> = {

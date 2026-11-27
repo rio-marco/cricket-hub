@@ -780,3 +780,98 @@
 - [x] Match correction requires a reason and uses the existing authoritative scoring path; unsupported historical edits are rejected instead of silently applied
 - [x] Auction monitoring is intentionally read-only and heuristic-based; do not add auction mutation without a separate audit and authorization design
 - [x] Socket.IO rooms and published-event de-duplication remain process-local; use a Redis adapter and shared de-duplication before running multiple backend instances
+
+## PHASE 14: PRODUCTION READINESS & SECURITY HARDENING (IN PROGRESS - PARTIAL)
+### Verified this pass (Phase 14G Flutter production audit/hardening - targeted)
+- [x] `cd mobile && dart format` on touched files passed
+- [x] `cd mobile && flutter test test/match_realtime_test.dart test/realtime_lifecycle_test.dart test/features/notifications/notification_lifecycle_test.dart test/features/notifications/notifications_feature_test.dart test/features/auction/auction_feature_test.dart` passed: **29 tests**
+- [x] `cd mobile && flutter analyze --no-fatal-infos --no-fatal-warnings` completed: **319 issues, 0 errors** (pre-existing infos/warnings)
+- [x] `git diff --check` passed
+- [ ] Full `flutter test` **NOT RUN** this pass (previous pass: 62 passed, 1 failed env-dependent `mobile/test/integration/backend_integration_test.dart` connection refused `127.0.0.1:5001`)
+- [ ] Backend integration/socket tests **BLOCKED** - no safe local Mongo `127.0.0.1:27019`, Docker unavailable/permission denied
+
+### Phase 14G targeted findings/fixes
+- [x] **API/logging privacy**: `ApiClient` LogInterceptor no longer logs request/response bodies or headers; debug logging still emits metadata/errors only.
+- [x] **Auth refresh safety**: 401 refresh-retry now limited to idempotent methods (`GET/HEAD/OPTIONS`) to avoid duplicating unsafe mutations after token refresh.
+- [x] **Routing/input safety**: parameterized match/team/player/tournament/auction routes validate 24-char ObjectId; invalid deep-link/route params show safe "Invalid link" screen instead of pushing empty IDs into screens/API calls.
+- [x] **Router lifecycle**: `_ListenableAdapter` now removes auth listener on dispose.
+- [x] **Duplicate mutation guard**: scoring and auction live controllers ignore new save actions while `isSaving` is true; regression test added for scoring duplicate-save guard.
+- [x] **Push lifecycle resilience**: `PushNotificationService.unregisterCurrentToken()` treats remote token removal as best-effort; local push token still cleared on logout.
+- [x] **Realtime lifecycle (14F.4 preserved)**: match/auction room providers autoDispose with disposed/recovery guards, reconnect rejoin+authoritative sync; notification account-switch reset and duplicate tap debounce.
+
+### Phase 14G remaining risks / not complete
+- [ ] Full Flutter audit not exhaustive across all 195 Dart files; targeted high-risk areas inspected (auth/API/routing/realtime/notifications/scoring/auction lifecycle).
+- [ ] No account-switch real-FCM/socket.io integration proof; token refresh retry still single-flight only for idempotent requests and does not queue unsafe mutations.
+- [ ] Full Flutter suite not rerun this pass; env-dependent backend integration test remains.
+- [ ] 310+ pre-existing analyzer infos/warnings remain (no global suppression).
+
+### Verified this pass (Phase 14F.3 socket/recovery/notification regression tests)
+- [x] `cd mobile && dart format` on touched realtime/test files passed
+- [x] `cd mobile && flutter test test/match_realtime_test.dart test/features/auction/auction_feature_test.dart test/features/notifications/notifications_feature_test.dart test/realtime_lifecycle_test.dart` passed: **23 tests**
+- [x] `cd mobile && flutter analyze --no-fatal-infos --no-fatal-warnings` completed: **313 issues, 0 errors** (pre-existing infos/warnings; no errors)
+- [x] `cd backend && npm run lint` previously passed in Phase 14F pass (backend unchanged in this pass)
+- [x] `cd backend && npm test -- --runInBand` previously passed: 24 suites, 92 tests (backend unchanged in this pass)
+- [x] `git diff --check` passed
+- [ ] `cd backend && npm run test:integration` **NOT RUN/BLOCKED** - no safe local Mongo on `127.0.0.1:27019`; Docker unavailable/permission denied
+- [ ] `cd mobile && flutter test` full suite **NOT RUN** this pass (targeted + prior 14F.2 tests run); prior full run had env-dependent backend integration failure
+
+### Implemented / hardened (cumulative, preserved)
+- [x] Security/config: helmet, disabled x-powered-by, configurable trust proxy, Swagger gated by `ENABLE_API_DOCS`, DB-aware `/api/health` (503 degraded), request sanitization middleware.
+- [x] Auth: login lockout fields/config/service checks, auth/OTP rate limiters, refresh-token hashing/rotation preserved; centralized `backend/src/utils/sanitizeUser.ts` allowlist.
+- [x] Authorization/IDOR: legacy admin routes protected/validated; match Playing XI captain check uses Player profile; XI/substitute active team membership validation; scoring auth before idempotency replay + expectedVersion; auction reads now require auth; auction team purse requires manager/owned-team access; notification endpoints user-scoped.
+- [x] Sensitive data/DTO: removed email/phone from audited public populates (team/player/tournament/match/auction bidBy removed); admin sanitize strips `password, otp, fcmToken, authLockout, __v`; legacy user controller excludes sensitive fields and blocks self-block/delete.
+- [x] Input/pagination: `getPaginationParams` supports allowed sort whitelists; applied to major list services and admin audit pagination; escaped regex search preserved; upload extension allowlist + magic-byte validation for avatar.
+- [x] Scoring hardening preserved: expectedVersion, optimistic version guard, duplicate-key replay gated by audit, correction revalidation, active delivery unique partial index, completed-innings destructive guard, socket completion flags.
+- [x] Auction hardening preserved: currentPlayerOrder cursor, scoped idempotency replay, bid decision/sold-settlement checks, completion consistency checks; auction read auth tightened.
+- [x] Docs: updated `docs/PHASE14_SECURITY.md`, `docs/PHASE14_PRODUCTION.md`, `docs/PROGRESS.md` with route inventory/matrix and unresolved decisions.
+
+### Phase 14E route audit status
+- [x] **Total routes inventoried**: 171 (app health + `/api/v1/health` + all route declarations in `backend/src/routes/*.ts`).
+- [x] **Route declarations audited**: 171/171 for auth/role/validation/rate-limit/ownership classification (code-level review).
+- [x] **ObjectId route param validation coverage**: All routes with path params now have explicit Joi param validation (`MISSING 0` by route scan). Added `backend/src/validators/params.validator.ts` and applied across auction/team/player/tournament/match/scoring/user/statistics/leaderboard/notification-related routes.
+- [ ] **Runtime/integration audit complete**: No. Integration DB tests blocked; socket multi-client/concurrency/reconnect not fully runtime-verified; staging/mobile manual verification still needed.
+- [x] Authorization matrix recorded in `docs/PHASE14_SECURITY.md`.
+
+### Phase 14F.3 regression tests added (this pass)
+- [x] Added `mobile/test/realtime_lifecycle_test.dart` with deterministic fake-socket/token-provider tests.
+- [x] Auth/socket lifecycle: current token used on connect; room rejoin on connect; TOKEN_EXPIRED same-token no rebuild; INVALID_TOKEN with changed token rebuilds socket and rejoins room; missing token does not connect/reconnect.
+- [x] Match recovery: stale same-innings stateVersion rejected; newer update from different/unknown innings is not discarded (covers stateVersion comparison edge case).
+- [x] Auction recovery: redacted broadcast payload merges preserve known financial fields (not erased, not interpreted as zero); stale auction stateVersion rejected.
+- [x] Notification tap routing: valid match/auction/auction-bidding payload routes; invalid IDs/malformed payloads rejected (safe fallback handled by provider route helper returning null).
+- [x] Existing 14F.2 targeted tests re-run and passing: `match_realtime_test.dart`, `features/auction/auction_feature_test.dart`, `features/notifications/notifications_feature_test.dart`.
+
+### Defects discovered/fixed during 14F.3
+- [x] **Auction redacted merge identity bug**: redacted `currentPlayer` payloads without `auctionPlayerId` (using `_id`) could fail same-player detection and drop preserved financial fields; fixed by matching on `auctionPlayerId/_id/id` in `auction_provider.dart`.
+- [x] **Testability gap**: realtime clients had hardcoded socket builders; added injectable socket builder constructors to match/auction/notification realtime clients (production default unchanged).
+- [x] **Notification route helper exposure**: extracted `notificationRouteForMessage` for deterministic payload-routing tests (no auth bypass; validation still enforces 24-char ObjectId and supported types).
+
+### Phase 14H backend DB/query/performance audit (code-level)
+- [x] **NotificationDelivery N+1 fixed**: `NotificationDeliveryService.processPendingDeliveries` batch-loads `Notification`/`DeviceToken` docs for the batch via `$in` maps; batch cap `<=100`. Regression tests updated; PASS.
+- [x] **Match live/completed N+1 fixed**: `getLiveMatches` loads active innings for live matches in one `$in` query; `getCompletedMatches` loads innings in one `$in` query and groups by match.
+- [x] **Unbounded match list endpoints bounded**: `getUpcomingMatches`/`getCompletedMatches` capped at `.limit(100)`.
+- [x] **Index/schema review (code-level, no migrations run)**: reviewed hot models/indexes; no speculative index added/removed.
+
+### Phase 14H.1 remaining hotspot pass (code-level)
+- [x] **Notification fan-out batching**: `NotificationService.notifyUsers` now processes recipients in bounded batches (100). Per batch: batched `NotificationPreference`, dedupe `Notification.find` by users+dedupeKey, batched active `DeviceToken` lookup. Creates notifications via `insertMany({ordered:false})`; handles duplicate-key (11000) as skip and other write errors as per-user failures reported in result (`failed/errors`), not silently counted as success. Unread counts computed by batch aggregation; socket events published per created notification. Delivery creation scheduled per created notification with existing service; delivery errors captured per user. Preserves dedupe/ownership/push preference semantics.
+- [x] **Admin reports bounded/paginated**: `adminService.getReport` now supports `page/limit` (default 100, max 500) with total/pagination; no longer loads all rows unbounded. `exportReport` streams in 500-row batches (not all-in-memory at once) to preserve export completeness; CSV format preserved. `adminReportQuerySchema` accepts optional `page/limit`.
+- [x] **Player statistics review**: reviewed aggregation pipelines in `playerStatistics.service.ts`. Pipelines already use `$match` early (match IDs/status), `$unwind` scoped to matched innings, `$project` for needed fields; fielding uses grouped delivery aggregation. No correctness-risk optimization changed without measurement; explain/representative-data verification blocked.
+- [x] **Populate chain review**: audited populate usage across services. Most populates are list/detail response requirements with projections; no obvious removable N+1 populate changed without API contract proof. Match detail/scorecard remain intentionally rich; list endpoints already use projections/pagination.
+- [x] **Regression tests**: added `backend/src/services/__tests__/notification.fanout.test.ts` (batch dedupe/preferences/tokens, partial insert failure reporting). Existing notification delivery/security tests updated/pass.
+- [x] **Verification**: `cd backend && npm run lint` PASS; `cd backend && npm test -- --runInBand` PASS (**25 suites, 94 tests**); `git diff --check` PASS.
+
+### Remaining / not complete
+- [ ] Scoring (remaining): replica-set tx dependency; mid-over bowler-change invariant; deeper wicket-law coverage; innings-ending undo/correct full regression/product decision; compensating-audit semantics; stable numbering policy; socket reconnect authoritative recovery/concurrency integration on real replica set.
+- [ ] Auction (remaining): explicit bid-ID acceptance across all sell flows; reject/restore revalidation; stale pending bid cleanup; minSquadSize/category/squad-composition enforcement (product rules); completion eligibility policy; socket mutation rate limiting/multi-instance adapter/dedupe; legacy order migration; real replica-set concurrency/integration coverage.
+- [x] Authz/DTO (this pass): auction financial-data policy implemented via field-level redaction (public none; authenticated non-manager/non-owner redacted; manager/owned-team full); auction read auth compatibility reviewed - Flutter uses authenticated Dio and auction endpoints; no anonymous/public auction consumer found in repo, so auth protection preserved. Upload visibility resolved as public avatars by design; no private media/delete endpoints. Explicit ObjectId param validation added for all parameterized routes.
+- [ ] Authz/DTO (remaining): full runtime verification of every DTO path; admin read/manage permission split before non-admin roles; future private media requires authenticated delivery; staging/mobile manual verification for auction auth + redacted financial fields.
+- [ ] DB performance (remaining): explain/query-plan measurement on safe DB; confirm index effectiveness/duplicates under real query shapes; audit remaining N+1/populate hot paths (`notification.service.notifyUsers` per-user exists/create/count/token lookups, admin unbounded/export-like reads, player statistics aggregations); consider cursor/aggregate optimizations only with evidence; no production index migrations run.
+- [ ] Socket/notifications: full multi-client runtime reconnect/recovery/event ordering on real backend+replica set; token refresh/multi-device/invalid cleanup/retry/dedupe/preferences/read-unread/navigation on real devices; per-socket rate limits distributed/shared.
+- [ ] Flutter: fix/segregate env-dependent integration test; provider disposal/account-switch/socket leak tests need Riverpod container + fake clients (not fully covered by this pass); full Flutter suite not run this pass.
+- [ ] Backend integration tests: **BLOCKED** - required `mongodb://127.0.0.1:27019/cricket_hub_integration_test`; no listener on 27019, no local `mongod`, Docker unavailable/permission denied.
+
+### Risks / limitations
+- MongoDB standalone transaction fallback reduces scoring/auction atomicity; production should use replica set.
+- In-memory rate limiting/socket dedupe are process-local; multi-instance needs shared store/adapter.
+- Integration tests and Flutter backend integration test not verifiable in current environment.
+- Auction financial fields visible to authenticated users; product policy unresolved.
+- `/uploads` static files are publicly accessible by filename; random names reduce but do not eliminate exposure.

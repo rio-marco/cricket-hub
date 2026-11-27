@@ -26,7 +26,7 @@ class AuctionPlayer {
     required this.auctionId,
     required this.playerId,
     this.playerName,
-    required this.basePrice,
+    this.basePrice = 0,
     this.soldPrice,
     this.soldTo,
     this.soldToName,

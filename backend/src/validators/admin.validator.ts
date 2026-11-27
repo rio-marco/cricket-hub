@@ -232,6 +232,8 @@ export const adminReportQuerySchema = Joi.object({
     .required(),
   from: Joi.date().iso().required(),
   to: Joi.date().iso().min(Joi.ref('from')).required(),
+  page: Joi.number().integer().min(1).max(100000).default(1),
+  limit: Joi.number().integer().min(1).max(500).default(100),
 });
 
 export const adminAuditQuerySchema = Joi.object({

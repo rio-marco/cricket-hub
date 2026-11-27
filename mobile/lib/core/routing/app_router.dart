@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/auth/presentation/screens/onboarding_screen.dart';
@@ -27,8 +28,10 @@ import '../../features/matches/presentation/screens/matches_screen.dart';
 import '../../features/matches/presentation/screens/create_match_screen.dart';
 import '../../features/matches/presentation/screens/match_detail_screen.dart';
 import '../../features/matches/presentation/screens/toss_screen.dart';
-import '../../features/matches/presentation/screens/live_scoring_screen.dart' as live_scoring;
-import '../../features/matches/presentation/screens/full_scorecard_screen.dart' as full_scorecard;
+import '../../features/matches/presentation/screens/live_scoring_screen.dart'
+    as live_scoring;
+import '../../features/matches/presentation/screens/full_scorecard_screen.dart'
+    as full_scorecard;
 import '../../features/auction/presentation/screens/auctions_screen.dart';
 import '../../features/auction/presentation/screens/create_auction_screen.dart';
 import '../../features/auction/presentation/screens/auction_detail_screen.dart';
@@ -109,10 +112,12 @@ class AppRoutes {
 // -----------------------------------------------------------------------------
 // GoRouter Provider & Navigation Graph
 // -----------------------------------------------------------------------------
-final GlobalKey<NavigatorState> rootNavigatorKey =
-    GlobalKey<NavigatorState>(debugLabel: 'root');
-final GlobalKey<NavigatorState> shellNavigatorKey =
-    GlobalKey<NavigatorState>(debugLabel: 'shell');
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(
+  debugLabel: 'root',
+);
+final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>(
+  debugLabel: 'shell',
+);
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authNotifier = ref.watch(authStateProvider.notifier);
@@ -134,7 +139,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       // Public authentication and onboarding routes
-      final isPublicRoute = location == AppRoutes.splash ||
+      final isPublicRoute =
+          location == AppRoutes.splash ||
           location == AppRoutes.onboarding ||
           location == AppRoutes.login ||
           location == AppRoutes.register ||
@@ -155,7 +161,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         return AppRoutes.home;
       }
 
-      if (isAuth && location.startsWith(AppRoutes.adminShell) && !ref.read(isAdminProvider)) {
+      if (isAuth &&
+          location.startsWith(AppRoutes.adminShell) &&
+          !ref.read(isAdminProvider)) {
         return AppRoutes.home;
       }
 
@@ -270,37 +278,32 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.home,
             name: 'home',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: HomeScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: HomeScreen()),
           ),
           GoRoute(
             path: AppRoutes.matches,
             name: 'matches',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: MatchesScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: MatchesScreen()),
           ),
           GoRoute(
             path: AppRoutes.tournaments,
             name: 'tournaments',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: TournamentsScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: TournamentsScreen()),
           ),
           GoRoute(
             path: AppRoutes.teams,
             name: 'teams',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: TeamsScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: TeamsScreen()),
           ),
           GoRoute(
             path: AppRoutes.profile,
             name: 'profile',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: ProfileScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: ProfileScreen()),
           ),
         ],
       ),
@@ -316,9 +319,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.teamDetail,
         name: 'teamDetail',
-        builder: (context, state) => TeamDetailScreen(
-          teamId: state.pathParameters['id'] ?? '',
-        ),
+        builder: (context, state) {
+          final id = state.pathParameters['id'];
+          if (!_isValidObjectId(id)) return const _InvalidRouteScreen();
+          return TeamDetailScreen(teamId: id!);
+        },
       ),
 
       // -----------------------------------------------------------------------
@@ -337,9 +342,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.playerDetail,
         name: 'playerDetail',
-        builder: (context, state) => PlayerDetailScreen(
-          playerId: state.pathParameters['id'] ?? '',
-        ),
+        builder: (context, state) {
+          final id = state.pathParameters['id'];
+          if (!_isValidObjectId(id)) return const _InvalidRouteScreen();
+          return PlayerDetailScreen(playerId: id!);
+        },
       ),
 
       // -----------------------------------------------------------------------
@@ -353,9 +360,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.tournamentDetail,
         name: 'tournamentDetail',
-        builder: (context, state) => TournamentDetailScreen(
-          tournamentId: state.pathParameters['id'] ?? '',
-        ),
+        builder: (context, state) {
+          final id = state.pathParameters['id'];
+          if (!_isValidObjectId(id)) return const _InvalidRouteScreen();
+          return TournamentDetailScreen(tournamentId: id!);
+        },
       ),
 
       // -----------------------------------------------------------------------
@@ -369,30 +378,38 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.matchDetail,
         name: 'matchDetail',
-        builder: (context, state) => MatchDetailScreen(
-          matchId: state.pathParameters['id'] ?? '',
-        ),
+        builder: (context, state) {
+          final id = state.pathParameters['id'];
+          if (!_isValidObjectId(id)) return const _InvalidRouteScreen();
+          return MatchDetailScreen(matchId: id!);
+        },
       ),
       GoRoute(
         path: AppRoutes.matchToss,
         name: 'matchToss',
-        builder: (context, state) => TossScreen(
-          matchId: state.pathParameters['id'] ?? '',
-        ),
+        builder: (context, state) {
+          final id = state.pathParameters['id'];
+          if (!_isValidObjectId(id)) return const _InvalidRouteScreen();
+          return TossScreen(matchId: id!);
+        },
       ),
       GoRoute(
         path: AppRoutes.matchScoring,
         name: 'matchScoring',
-        builder: (context, state) => live_scoring.LiveScoringScreen(
-          matchId: state.pathParameters['id'] ?? '',
-        ),
+        builder: (context, state) {
+          final id = state.pathParameters['id'];
+          if (!_isValidObjectId(id)) return const _InvalidRouteScreen();
+          return live_scoring.LiveScoringScreen(matchId: id!);
+        },
       ),
       GoRoute(
         path: AppRoutes.matchScorecard,
         name: 'matchScorecard',
-        builder: (context, state) => full_scorecard.FullScorecardScreen(
-          matchId: state.pathParameters['id'] ?? '',
-        ),
+        builder: (context, state) {
+          final id = state.pathParameters['id'];
+          if (!_isValidObjectId(id)) return const _InvalidRouteScreen();
+          return full_scorecard.FullScorecardScreen(matchId: id!);
+        },
       ),
 
       // -----------------------------------------------------------------------
@@ -416,16 +433,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.auctionDetail,
         name: 'auctionDetail',
-        builder: (context, state) => AuctionDetailScreen(
-          auctionId: state.pathParameters['id'] ?? '',
-        ),
+        builder: (context, state) {
+          final id = state.pathParameters['id'];
+          if (!_isValidObjectId(id)) return const _InvalidRouteScreen();
+          return AuctionDetailScreen(auctionId: id!);
+        },
       ),
       GoRoute(
         path: AppRoutes.auctionBidding,
         name: 'auctionBidding',
-        builder: (context, state) => AuctionBiddingScreen(
-          auctionId: state.pathParameters['id'] ?? '',
-        ),
+        builder: (context, state) {
+          final id = state.pathParameters['id'];
+          if (!_isValidObjectId(id)) return const _InvalidRouteScreen();
+          return AuctionBiddingScreen(auctionId: id!);
+        },
       ),
       GoRoute(
         path: AppRoutes.leaderboard,
@@ -503,13 +524,53 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
+final _objectIdPattern = RegExp(r'^[a-fA-F0-9]{24}$');
+bool _isValidObjectId(String? id) =>
+    id != null && _objectIdPattern.hasMatch(id.trim());
+
+class _InvalidRouteScreen extends StatelessWidget {
+  const _InvalidRouteScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Invalid link')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.link_off, size: 48),
+              const SizedBox(height: 12),
+              const Text('The requested item link is invalid.'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => context.go(AppRoutes.home),
+                child: const Text('Go home'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Listenable adapter wrapping StateNotifier for GoRouter refreshListenable.
 class _ListenableAdapter extends ChangeNotifier {
   final StateNotifier<dynamic> _notifier;
+  late final RemoveListener _remove;
 
   _ListenableAdapter(this._notifier) {
-    _notifier.addListener((_) {
+    _remove = _notifier.addListener((_) {
       notifyListeners();
     });
+  }
+
+  @override
+  void dispose() {
+    _remove();
+    super.dispose();
   }
 }

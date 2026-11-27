@@ -2,6 +2,7 @@ import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { registerMatchHandlers } from '../sockets/matchHandlers';
 import { registerAuctionHandlers } from '../sockets/auctionHandlers';
+import { socketAuth } from '../sockets/auth';
 import { MatchSocketServer, setSocketServer, userRoom } from '../sockets/publisher';
 import {
   ClientToServerEvents,
@@ -29,6 +30,7 @@ export const configureSocketIO = (server: HttpServer): MatchSocketServer => {
   });
 
   setSocketServer(io);
+  io.use(socketAuth);
   registerMatchHandlers(io);
   registerAuctionHandlers(io);
 

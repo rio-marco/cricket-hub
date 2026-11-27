@@ -28,7 +28,7 @@ class Auction {
     this.tournamentName,
     this.teams = const [],
     this.teamNames = const [],
-    required this.purseAmount,
+    this.purseAmount = 0,
     this.basePrice = 0,
     this.minBidIncrement = 0,
     this.maxSquadSize = 0,

@@ -33,6 +33,8 @@ export interface NotificationResult {
   created: number;
   skipped: number;
   users: string[];
+  failed?: number;
+  errors?: Array<{ userId: string; error: string }>;
 }
 
 const categoryByType: Record<NotificationType, NotificationCategory> = {
@@ -148,83 +150,141 @@ export class NotificationService {
       return { created: 0, skipped: recipients.length, users: [] };
     }
 
-    const preferences = await NotificationPreference.find({ user: { $in: recipients } }).lean();
-    const preferenceByUser = new Map<string, Partial<INotificationPreference>>(
-      recipients.map((userId) => [
-        userId,
-        (preferences.find((preference: any) => String(preference.user) === userId) ||
-          defaultPushPreferences) as Partial<INotificationPreference>,
-      ])
-    );
-
-    const notificationsToCreate: Array<Partial<INotification>> = [];
-    for (const userId of recipients) {
-      if (input.dedupeKey) {
-        const existing = await Notification.exists({ user: userId, dedupeKey: input.dedupeKey });
-        if (existing) continue;
-      }
-
-      notificationsToCreate.push({
-        user: new Types.ObjectId(userId),
-        type: input.type,
-        category: input.category || categoryByType[input.type] || NotificationCategory.SYSTEM,
-        title: input.title,
-        body: input.body,
-        data: input.data || {},
-        relatedEntityType: input.relatedEntityType,
-        relatedEntityId: input.relatedEntityId,
-        dedupeKey: input.dedupeKey,
-        expiresAt: input.expiresAt,
-        isRead: false,
-      });
-    }
-
-    if (!notificationsToCreate.length) {
-      return { created: 0, skipped: recipients.length, users: [] };
-    }
-
+    const BATCH_SIZE = 100;
     const createdUsers: string[] = [];
-    for (const document of notificationsToCreate) {
-      const userId = String(document.user);
-      let notification: any;
-      try {
-        notification = await Notification.create(document);
-      } catch (error: any) {
-        if (error?.code === 11000 && input.dedupeKey) continue;
-        throw error;
+    const errors: Array<{ userId: string; error: string }> = [];
+    let skipped = 0;
+
+    for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+      const batch = recipients.slice(i, i + BATCH_SIZE);
+
+      const [preferences, existingDedupe, tokens] = await Promise.all([
+        NotificationPreference.find({ user: { $in: batch } }).lean(),
+        input.dedupeKey
+          ? Notification.find({ user: { $in: batch }, dedupeKey: input.dedupeKey })
+              .select('user')
+              .lean()
+          : Promise.resolve([]),
+        DeviceToken.find({ user: { $in: batch }, isActive: true }).select('user token').lean(),
+      ]);
+
+      const preferenceByUser = new Map<string, Partial<INotificationPreference>>(
+        batch.map((userId) => [
+          userId,
+          (preferences.find((p: any) => String(p.user) === userId) ||
+            defaultPushPreferences) as Partial<INotificationPreference>,
+        ])
+      );
+
+      const dedupeUserIds = new Set(existingDedupe.map((n: any) => String(n.user)));
+      const tokensByUser = new Map<string, string[]>();
+      for (const t of tokens as any[]) {
+        const uid = String(t.user);
+        const list = tokensByUser.get(uid) || [];
+        list.push(String(t.token));
+        tokensByUser.set(uid, list);
       }
 
-      createdUsers.push(userId);
-      const serialized = serializeNotification(notification);
-      const unreadCount = await Notification.countDocuments({ user: userId, isRead: false });
-      publishNotificationEvent(userId, NOTIFICATION_EVENTS.created, {
-        eventId: `${serialized.id}:created`,
-        notification: serialized,
-        unreadCount,
-      });
-      publishNotificationEvent(userId, NOTIFICATION_EVENTS.unreadCount, {
-        eventId: `${serialized.id}:unread-count`,
-        unreadCount,
-      });
+      const notificationsToCreate: Array<Partial<INotification>> = [];
+      for (const userId of batch) {
+        if (dedupeUserIds.has(userId)) {
+          skipped += 1;
+          continue;
+        }
+        notificationsToCreate.push({
+          user: new Types.ObjectId(userId),
+          type: input.type,
+          category: input.category || categoryByType[input.type] || NotificationCategory.SYSTEM,
+          title: input.title,
+          body: input.body,
+          data: input.data || {},
+          relatedEntityType: input.relatedEntityType,
+          relatedEntityId: input.relatedEntityId,
+          dedupeKey: input.dedupeKey,
+          expiresAt: input.expiresAt,
+          isRead: false,
+        });
+      }
 
-      const preference = preferenceByUser.get(userId);
-      if (preference && this.canPush(preference, input.type)) {
-        const tokens = await DeviceToken.find({ user: userId, isActive: true })
-          .select('token')
-          .lean();
-        await this.deliveryService.createDeliveries(
-          notification._id,
-          tokens.map((token: any) => String(token.token))
-        );
-        this.deliveryService.scheduleProcessing();
+      if (!notificationsToCreate.length) continue;
+
+      let createdNotifications: any[] = [];
+      try {
+        createdNotifications = await Notification.insertMany(notificationsToCreate, { ordered: false });
+      } catch (error: any) {
+        if (error?.writeErrors || error?.insertedDocs) {
+          createdNotifications = Array.isArray(error.insertedDocs) ? error.insertedDocs : [];
+          const writeErrors = Array.isArray(error.writeErrors) ? error.writeErrors : [];
+          for (const we of writeErrors) {
+            if (we?.code === 11000 && input.dedupeKey) {
+              skipped += 1;
+              continue;
+            }
+            const failedDoc = notificationsToCreate[we?.index];
+            const uid = failedDoc ? String(failedDoc.user) : 'unknown';
+            errors.push({ userId: uid, error: we?.errmsg || 'Failed to create notification' });
+          }
+        } else {
+          throw error;
+        }
+      }
+
+      if (createdNotifications.length === 0) continue;
+
+      const createdUserIds = createdNotifications.map((n: any) => String(n.user));
+      createdUsers.push(...createdUserIds);
+
+      // Batch unread counts for created users
+      const unreadCounts = await Notification.aggregate<{ _id: Types.ObjectId; count: number }>([
+        { $match: { user: { $in: createdUserIds.map((id) => new Types.ObjectId(id)) }, isRead: false, ...notExpired() } },
+        { $group: { _id: '$user', count: { $sum: 1 } } },
+      ]);
+      const unreadByUser = new Map<string, number>(
+        unreadCounts.map((r) => [String(r._id), r.count])
+      );
+
+      for (const notification of createdNotifications) {
+        const userId = String(notification.user);
+        const serialized = serializeNotification(notification);
+        const unreadCount = unreadByUser.get(userId) ?? 1;
+        publishNotificationEvent(userId, NOTIFICATION_EVENTS.created, {
+          eventId: `${serialized.id}:created`,
+          notification: serialized,
+          unreadCount,
+        });
+        publishNotificationEvent(userId, NOTIFICATION_EVENTS.unreadCount, {
+          eventId: `${serialized.id}:unread-count`,
+          unreadCount,
+        });
+
+        const preference = preferenceByUser.get(userId);
+        if (preference && this.canPush(preference, input.type)) {
+          const userTokens = tokensByUser.get(userId) || [];
+          if (userTokens.length > 0) {
+            try {
+              await this.deliveryService.createDeliveries(notification._id, userTokens);
+              this.deliveryService.scheduleProcessing();
+            } catch (deliveryError: any) {
+              errors.push({
+                userId,
+                error: deliveryError?.message || 'Failed to create delivery records',
+              });
+            }
+          }
+        }
       }
     }
 
-    return {
+    const result: NotificationResult = {
       created: createdUsers.length,
-      skipped: recipients.length - createdUsers.length,
+      skipped: recipients.length - createdUsers.length - errors.length,
       users: createdUsers,
     };
+    if (errors.length > 0) {
+      result.failed = errors.length;
+      result.errors = errors;
+    }
+    return result;
   }
 
   async notifyUser(userId: string | Types.ObjectId, input: NotificationInput): Promise<NotificationResult> {
@@ -232,7 +292,7 @@ export class NotificationService {
   }
 
   async getNotifications(userId: string, query: Record<string, any> = {}) {
-    const { page, limit, skip, sort } = getPaginationParams(query, 20, 100, '-createdAt');
+    const { page, limit, skip, sort } = getPaginationParams(query, 20, 100, '-createdAt', ['createdAt','updatedAt','readAt','type','category','isRead']);
     const filter: Record<string, any> = {
       user: new Types.ObjectId(userId),
       ...notExpired(),
@@ -344,7 +404,16 @@ export class NotificationService {
 
   async registerDeviceToken(userId: string, input: DeviceTokenInput): Promise<any> {
     const token = input.token.trim();
-    await DeviceToken.deleteMany({ token, user: { $ne: new Types.ObjectId(userId) } });
+    const staleTokens = await DeviceToken.find({ token, user: { $ne: new Types.ObjectId(userId) } })
+      .select('_id user')
+      .lean();
+    if (staleTokens.length > 0) {
+      await DeviceToken.deleteMany({ token, user: { $ne: new Types.ObjectId(userId) } });
+      await User.updateMany(
+        { _id: { $in: staleTokens.map((item: any) => item.user) }, fcmToken: token },
+        { $unset: { fcmToken: 1 } }
+      );
+    }
     const deviceToken = await DeviceToken.findOneAndUpdate(
       { token },
       {
@@ -355,6 +424,7 @@ export class NotificationService {
           appVersion: input.appVersion?.trim() || undefined,
           isActive: true,
           lastUsedAt: new Date(),
+          lastError: undefined,
         },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -365,8 +435,17 @@ export class NotificationService {
   }
 
   async removeDeviceToken(userId: string, token: string): Promise<void> {
-    await DeviceToken.deleteOne({ user: new Types.ObjectId(userId), token: token.trim() });
-    await User.updateOne({ _id: userId, fcmToken: token.trim() }, { $set: { fcmToken: '' } });
+    const cleaned = token.trim();
+    await DeviceToken.deleteOne({ user: new Types.ObjectId(userId), token: cleaned });
+    const stillActive = await DeviceToken.findOne({ user: new Types.ObjectId(userId), isActive: true })
+      .sort({ updatedAt: -1 })
+      .select('token')
+      .lean();
+    if (stillActive?.token) {
+      await User.updateOne({ _id: userId }, { $set: { fcmToken: stillActive.token } });
+    } else {
+      await User.updateOne({ _id: userId, fcmToken: cleaned }, { $unset: { fcmToken: 1 } });
+    }
   }
 
   async listDeviceTokens(userId: string): Promise<any[]> {

@@ -61,6 +61,10 @@ export class ApiError extends Error {
     return new ApiError(429, message, errors);
   }
 
+  public static serviceUnavailable(message: string = 'Service unavailable', errors: any[] = []): ApiError {
+    return new ApiError(503, message, errors, true);
+  }
+
   /**
    * 500 Internal Server Error
    */

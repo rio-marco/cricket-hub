@@ -18,7 +18,7 @@ class AuctionTeam {
     required this.teamId,
     this.teamName,
     this.ownerId,
-    required this.initialBudget,
+    this.initialBudget = 0,
     this.spent = 0,
     this.pendingCommitment = 0,
     this.playersPurchased = 0,

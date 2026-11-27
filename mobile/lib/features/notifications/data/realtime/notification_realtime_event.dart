@@ -5,9 +5,11 @@ class NotificationRealtimeEvent {
   final String? eventId;
   final int? unreadCount;
   final AppNotification? notification;
+  final Map<String, dynamic> data;
 
   const NotificationRealtimeEvent({
     required this.name,
+    required this.data,
     this.eventId,
     this.unreadCount,
     this.notification,
@@ -18,10 +20,12 @@ class NotificationRealtimeEvent {
     final notification = normalizeMapOrNull(data['notification']);
     return NotificationRealtimeEvent(
       name: name,
+      data: data,
       eventId: _string(data['eventId']),
       unreadCount: _int(data['unreadCount']),
-      notification:
-          notification == null ? null : AppNotification.fromJson(notification),
+      notification: notification == null
+          ? null
+          : AppNotification.fromJson(notification),
     );
   }
 }
@@ -47,7 +51,9 @@ Map<String, dynamic>? normalizeMapOrNull(dynamic value) {
 
 dynamic normalizeValue(dynamic value) {
   if (value is Map) {
-    return value.map((key, item) => MapEntry(key.toString(), normalizeValue(item)));
+    return value.map(
+      (key, item) => MapEntry(key.toString(), normalizeValue(item)),
+    );
   }
   if (value is List) {
     return value.map(normalizeValue).toList();

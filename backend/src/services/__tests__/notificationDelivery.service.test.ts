@@ -12,6 +12,7 @@ jest.mock('../../models/Notification', () => ({
   __esModule: true,
   default: {
     findById: jest.fn(),
+    find: jest.fn(),
   },
 }));
 
@@ -19,6 +20,7 @@ jest.mock('../../models/DeviceToken', () => ({
   __esModule: true,
   default: {
     findById: jest.fn(),
+    find: jest.fn(),
     findByIdAndUpdate: jest.fn(),
   },
 }));
@@ -114,9 +116,17 @@ describe('NotificationDeliveryService', () => {
       select: jest.fn().mockReturnThis(),
       lean: jest.fn().mockResolvedValue(notificationDocument),
     });
+    mocked(Notification.find).mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([notificationDocument]),
+    });
     mocked(DeviceToken.findById).mockReturnValue({
       select: jest.fn().mockReturnThis(),
       lean: jest.fn().mockResolvedValue(deviceTokenDocument),
+    });
+    mocked(DeviceToken.find).mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([deviceTokenDocument]),
     });
     mocked(DeviceToken.findByIdAndUpdate).mockResolvedValue({});
   });
@@ -163,6 +173,39 @@ describe('NotificationDeliveryService', () => {
       deliveryId,
       expect.objectContaining({
         $set: expect.objectContaining({ status: NotificationDeliveryStatus.CANCELLED }),
+      })
+    );
+  });
+
+  it('cancels delivery when device token owner does not match notification owner', async () => {
+    mocked(Notification.find).mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([{ ...notificationDocument, user: notificationId }]),
+    } as any);
+    mocked(DeviceToken.find).mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue([{
+        _id: deviceTokenId,
+        token: 'fcm-token-1234567890',
+        user: new Types.ObjectId('507f1f77bcf86cd799439099'),
+        isActive: true,
+      }]),
+    } as any);
+
+    const result = await service.processPendingDeliveries();
+
+    expect(result.cancelled).toBe(1);
+    expect(sender.calls).toHaveLength(0);
+    expect(mocked(DeviceToken.findByIdAndUpdate)).toHaveBeenCalledWith(deviceTokenId, expect.objectContaining({
+      $set: expect.objectContaining({ isActive: false, lastError: 'Device token ownership mismatch' }),
+    }));
+    expect(mocked(NotificationDelivery.findByIdAndUpdate)).toHaveBeenCalledWith(
+      deliveryId,
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          status: NotificationDeliveryStatus.CANCELLED,
+          lastErrorCode: 'DEVICE_TOKEN_OWNER_MISMATCH',
+        }),
       })
     );
   });

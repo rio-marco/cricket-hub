@@ -114,7 +114,7 @@ export const searchPlayerSchema = Joi.object({
   city: Joi.string().trim().optional().allow(''),
   page: Joi.number().integer().min(1).optional().default(1),
   limit: Joi.number().integer().min(1).max(100).optional().default(10),
-  sort: Joi.string().trim().optional().default('-createdAt'),
+  sort: Joi.string().valid('createdAt','-createdAt','name','-name','city','-city','role','-role','battingStyle','-battingStyle','bowlingStyle','-bowlingStyle','updatedAt','-updatedAt').optional().default('-createdAt'),
   order: Joi.string().valid('asc', 'desc').optional(),
 });
 

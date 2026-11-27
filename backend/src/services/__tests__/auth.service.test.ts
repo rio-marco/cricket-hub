@@ -147,4 +147,31 @@ describe('AuthService', () => {
       { isRevoked: true }
     );
   });
+
+  it('locks account after configured failed login attempts', async () => {
+    const user = makeUser({ isVerified: true, isBlocked: false, comparePassword: jest.fn().mockResolvedValue(false), save: jest.fn().mockResolvedValue(undefined) });
+    (User.findOne as jest.Mock).mockReturnValue({ select: jest.fn().mockResolvedValue(user) });
+    (env as any).AUTH_LOGIN_MAX_ATTEMPTS = 2;
+    (env as any).AUTH_LOGIN_LOCK_MINUTES = 15;
+
+    await expect(new AuthService().login({ email: 'test@example.com', password: 'bad' })).rejects.toMatchObject({ statusCode: 401 });
+    expect(user.authLockout.failedAttempts).toBe(1);
+
+    await expect(new AuthService().login({ email: 'test@example.com', password: 'bad' })).rejects.toMatchObject({ statusCode: 401 });
+    expect(user.authLockout.lockUntil).toBeInstanceOf(Date);
+    expect(user.authLockout.failedAttempts).toBe(0);
+  });
+
+  it('rejects login while lockout is active and clears lockout on success', async () => {
+    const locked = makeUser({ isVerified: true, isBlocked: false, authLockout: { failedAttempts: 0, lockUntil: new Date(Date.now() + 60000) }, comparePassword: jest.fn().mockResolvedValue(true), save: jest.fn().mockResolvedValue(undefined) });
+    (User.findOne as jest.Mock).mockReturnValue({ select: jest.fn().mockResolvedValue(locked) });
+    await expect(new AuthService().login({ email: 'test@example.com', password: 'Password1' })).rejects.toMatchObject({ statusCode: 429 });
+
+    const recover = makeUser({ isVerified: true, isBlocked: false, authLockout: { failedAttempts: 2, lockUntil: undefined }, comparePassword: jest.fn().mockResolvedValue(true), save: jest.fn().mockResolvedValue(undefined) });
+    (User.findOne as jest.Mock).mockReturnValue({ select: jest.fn().mockResolvedValue(recover) });
+    (RefreshToken.create as jest.Mock).mockResolvedValue({});
+    const result = await new AuthService().login({ email: 'test@example.com', password: 'Password1' });
+    expect(result.tokens.accessToken).toEqual(expect.any(String));
+    expect(recover.authLockout.failedAttempts).toBe(0);
+  });
 });

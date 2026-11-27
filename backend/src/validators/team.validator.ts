@@ -117,6 +117,14 @@ export const updateMemberRoleSchema = Joi.object({
     }),
 });
 
+export const teamQuerySchema = Joi.object({
+  page: Joi.number().integer().min(1),
+  limit: Joi.number().integer().min(1).max(100),
+  sort: Joi.string().valid('createdAt', '-createdAt', 'name', '-name', 'city', '-city', 'updatedAt', '-updatedAt'),
+  search: Joi.string().trim().max(100).allow(''),
+  city: Joi.string().trim().max(100).allow(''),
+});
+
 export default {
   createTeamSchema,
   updateTeamSchema,
@@ -124,4 +132,5 @@ export default {
   addPlayerSchema,
   respondInvitationSchema,
   updateMemberRoleSchema,
+  teamQuerySchema,
 };

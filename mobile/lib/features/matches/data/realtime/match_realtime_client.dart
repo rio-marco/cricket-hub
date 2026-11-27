@@ -31,6 +31,25 @@ abstract class MatchRealtimeClient {
   Future<void> dispose();
 }
 
+typedef MatchSocketBuilder = io.Socket Function(String url, String token);
+
+io.Socket _defaultMatchSocketBuilder(String url, String token) {
+  return io.io(
+    url,
+    io.OptionBuilder()
+        .enableForceNew()
+        .setTransports(['websocket', 'polling'])
+        .enableAutoConnect()
+        .enableReconnection()
+        .setReconnectionAttempts(8)
+        .setReconnectionDelay(1000)
+        .setReconnectionDelayMax(10000)
+        .setAuth({'token': token})
+        .setExtraHeaders({'Authorization': 'Bearer $token'})
+        .build(),
+  );
+}
+
 class SocketIOMatchRealtimeClient implements MatchRealtimeClient {
   static const _serverEvents = <String>[
     'connection:status',
@@ -48,6 +67,7 @@ class SocketIOMatchRealtimeClient implements MatchRealtimeClient {
 
   final String _url;
   final RealtimeTokenProvider _tokenProvider;
+  final MatchSocketBuilder _socketBuilder;
   final StreamController<MatchRealtimeEvent> _events =
       StreamController<MatchRealtimeEvent>.broadcast();
   final Set<String> _rooms = <String>{};
@@ -56,11 +76,16 @@ class SocketIOMatchRealtimeClient implements MatchRealtimeClient {
   io.Socket? _socket;
   String? _token;
   Future<void>? _connecting;
+  bool _connectingIntent = false;
+  String? _tokenError;
 
   SocketIOMatchRealtimeClient({
-    required this._url,
-    required this._tokenProvider,
-  });
+    required String url,
+    required RealtimeTokenProvider tokenProvider,
+    MatchSocketBuilder? socketBuilder,
+  }) : _url = url,
+       _tokenProvider = tokenProvider,
+       _socketBuilder = socketBuilder ?? _defaultMatchSocketBuilder;
 
   @override
   Stream<MatchRealtimeEvent> get events => _events.stream;
@@ -72,11 +97,16 @@ class SocketIOMatchRealtimeClient implements MatchRealtimeClient {
   bool get isConnected => _socket?.connected ?? false;
 
   @override
-  Future<void> connect() => _ensureConnected();
+  Future<void> connect() async {
+    _connectingIntent = true;
+    _tokenError = null;
+    await _ensureConnected();
+  }
 
   @override
   Future<void> joinMatch(String matchId) async {
     if (!_rooms.add(matchId)) return;
+    _connectingIntent = true;
     await _ensureConnected();
     await _joinCurrentRoom(matchId);
   }
@@ -97,6 +127,8 @@ class SocketIOMatchRealtimeClient implements MatchRealtimeClient {
 
   @override
   void disconnect() {
+    _connectingIntent = false;
+    _tokenError = null;
     _rooms.clear();
     _joinedRooms.clear();
     _teardownSocket();
@@ -109,6 +141,7 @@ class SocketIOMatchRealtimeClient implements MatchRealtimeClient {
   }
 
   Future<void> _ensureConnected() async {
+    if (!_connectingIntent) return;
     final token = await _tokenProvider.getToken();
     if (token == null || token.isEmpty) return;
 
@@ -135,37 +168,36 @@ class SocketIOMatchRealtimeClient implements MatchRealtimeClient {
   }
 
   Future<void> _createSocket(String token) async {
-    final socket = io.io(
-      _url,
-      io.OptionBuilder()
-        .enableForceNew()
-        .setTransports(['websocket', 'polling'])
-        .enableAutoConnect()
-        .enableReconnection()
-        .setReconnectionAttempts(8)
-        .setReconnectionDelay(1000)
-        .setReconnectionDelayMax(10000)
-        .setAuth({'token': token})
-        .setExtraHeaders({'Authorization': 'Bearer $token'})
-        .build(),
-    );
+    final socket = _socketBuilder(_url, token);
     _socket = socket;
 
     socket.onConnect((_) {
+      _tokenError = null;
       _joinedRooms.clear();
+      _push('connection:status', {
+        'status': 'connected',
+        'connected': true,
+        'socketId': socket.id,
+        'at': DateTime.now().toIso8601String(),
+      });
       for (final matchId in _rooms.toList()) {
         unawaited(_joinCurrentRoom(matchId));
       }
     });
-    socket.onDisconnect((_) {
+    socket.onDisconnect((reason) {
       _joinedRooms.clear();
+      _push('connection:status', {
+        'status': 'disconnected',
+        'connected': false,
+        'reason': reason?.toString(),
+        'at': DateTime.now().toIso8601String(),
+      });
     });
-    socket.onConnectError((error) {
-      _pushError('connect_error', error);
-    });
-    socket.onError((error) {
-      _pushError('socket_error', error);
-    });
+    socket.onConnectError((error) => _handleConnectError(error));
+    try {
+      socket.onError((error) => _handleConnectError(error));
+    } catch (_) {}
+
     for (final event in _serverEvents) {
       socket.on(event, (data) => _push(event, data));
     }
@@ -174,7 +206,22 @@ class SocketIOMatchRealtimeClient implements MatchRealtimeClient {
   Future<void> _joinCurrentRoom(String matchId) async {
     if (!isConnected || !_joinedRooms.add(matchId)) return;
     final ack = await _ack('match:join', {'matchId': matchId});
-    if (ack != null) _push('match:state', ack);
+    if (ack == null) return;
+    final ok = ack['ok'] != false && ack['state'] != null;
+    if (!ok) {
+      _joinedRooms.remove(matchId);
+      _push('match:error', {
+        'matchId': matchId,
+        'error':
+            ack['error'] ??
+            <String, dynamic>{
+              'code': 'MATCH_JOIN_FAILED',
+              'message': 'Could not join live match room.',
+            },
+      });
+      return;
+    }
+    _push('match:state', ack);
   }
 
   Future<Map<String, dynamic>?> _ack(
@@ -218,6 +265,46 @@ class SocketIOMatchRealtimeClient implements MatchRealtimeClient {
         'message': error?.toString() ?? 'Realtime connection failed.',
       },
     });
+  }
+
+  void _handleConnectError(dynamic error) {
+    final normalized = normalizeMapOrNull(error);
+    final message =
+        normalized?['message']?.toString() ?? error?.toString() ?? '';
+    final data = normalizeMapOrNull(normalized?['data']);
+    final code = data?['code']?.toString() ?? normalized?['code']?.toString();
+
+    if (code == 'TOKEN_EXPIRED' || code == 'INVALID_TOKEN') {
+      if (_tokenError == code) return;
+      _tokenError = code;
+      unawaited(_refreshTokenAndReconnect(code: code!, message: message));
+      return;
+    }
+
+    _pushError(code ?? 'connect_error', message.isEmpty ? error : message);
+  }
+
+  Future<void> _refreshTokenAndReconnect({
+    required String code,
+    String? message,
+  }) async {
+    final refreshedToken = await _tokenProvider.getToken();
+    final currentToken = _token;
+    if (refreshedToken == null || refreshedToken.isEmpty) {
+      _pushError(code, message ?? 'Realtime authentication failed.');
+      disconnect();
+      return;
+    }
+
+    if (currentToken != null && refreshedToken != currentToken) {
+      _teardownSocket();
+      if (_connectingIntent) {
+        await _ensureConnected();
+      }
+      return;
+    }
+
+    _pushError(code, message ?? 'Realtime authentication failed.');
   }
 
   void _teardownSocket() {

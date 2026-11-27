@@ -48,6 +48,7 @@ abstract class AuthRepository {
   /// Logs out user, invalidating session on server and deleting local tokens.
   Future<void> logout({
     String? refreshToken,
+    String? fcmToken,
   });
 
   /// Retrieves the current user's profile details from remote server.

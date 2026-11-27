@@ -263,7 +263,7 @@ export class MatchService {
    * Get all matches with pagination, filters by status, tournament, team, search
    */
   public async getMatches(query: Record<string, any>): Promise<IMatchListResult> {
-    const { page, limit, skip, sort } = getPaginationParams(query, 10, 100, '-matchDate');
+    const { page, limit, skip, sort } = getPaginationParams(query, 10, 100, '-matchDate', ['matchDate','createdAt','updatedAt','status','title']);
 
     const filter: Record<string, any> = {};
 
@@ -301,7 +301,7 @@ export class MatchService {
         .populate('teamA', 'name logo location')
         .populate('teamB', 'name logo location')
         .populate('tournament', 'name format matchFormat')
-        .populate('scorer', 'name email avatar phone')
+        .populate('scorer', 'name avatar')
         .populate('result.winner', 'name logo')
         .populate({
           path: 'playerOfMatch',
@@ -331,10 +331,10 @@ export class MatchService {
     }
 
     const match = await Match.findById(id)
-      .populate('teamA', 'name logo location owner captain')
-      .populate('teamB', 'name logo location owner captain')
+      .populate('teamA', 'name logo location captain')
+      .populate('teamB', 'name logo location captain')
       .populate('tournament', 'name format matchFormat ballType')
-      .populate('scorer', 'name email avatar phone')
+      .populate('scorer', 'name avatar')
       .populate('toss.winner', 'name logo')
       .populate('result.winner', 'name logo')
       .populate({
@@ -547,7 +547,10 @@ export class MatchService {
     }
 
     const isOwner = team.owner.toString() === userId;
-    const isCaptain = team.captain && team.captain.toString() === userId;
+    const callerPlayer = await Player.findOne({ user: userId }).select('_id').lean();
+    const isCaptain = Boolean(
+      team.captain && callerPlayer?._id && team.captain.toString() === callerPlayer._id.toString()
+    );
     const isScorer = match.scorer && match.scorer.toString() === userId;
     const isAdminUser = await this.isAdmin(userId);
 
@@ -573,6 +576,23 @@ export class MatchService {
     const uniquePlayers = new Set(playingXI);
     if (uniquePlayers.size !== 11) {
       throw ApiError.badRequest('Playing XI contains duplicate players.');
+    }
+
+    const allSelected = [...playingXI, ...(substitutes || [])];
+    const uniqueAll = new Set(allSelected.map(String));
+    if (uniqueAll.size !== allSelected.length) {
+      throw ApiError.badRequest('Playing XI and substitutes must not contain duplicate players.');
+    }
+    const selectedObjectIds = allSelected.map((p) => new Types.ObjectId(p));
+    const activeMembers = await TeamMember.find({
+      team: teamId,
+      player: { $in: selectedObjectIds },
+      isActive: true,
+    }).select('player').lean();
+    const activeSet = new Set(activeMembers.map((m: any) => m.player.toString()));
+    const invalid = allSelected.filter((p) => !activeSet.has(String(p)));
+    if (invalid.length > 0) {
+      throw ApiError.badRequest('All selected players must be active members of the team.');
     }
 
     // Convert strings to ObjectIds
@@ -621,7 +641,7 @@ export class MatchService {
     const populatedMatch = await Match.findById(match._id)
       .populate('teamA', 'name logo')
       .populate('teamB', 'name logo')
-      .populate('scorer', 'name email avatar phone');
+      .populate('scorer', 'name avatar');
 
     await notifySafely([scorerId], {
       type: NotificationType.GENERAL,
@@ -750,7 +770,7 @@ export class MatchService {
     const populatedMatch = await Match.findById(match._id)
       .populate('teamA', 'name logo')
       .populate('teamB', 'name logo')
-      .populate('scorer', 'name email avatar');
+      .populate('scorer', 'name avatar');
 
     const recipients = await this.getNotificationRecipients(match._id, userId);
     await notifySafely(recipients, {
@@ -778,41 +798,43 @@ export class MatchService {
       .populate('teamA', 'name logo location')
       .populate('teamB', 'name logo location')
       .populate('tournament', 'name format matchFormat')
-      .populate('scorer', 'name email avatar phone')
+      .populate('scorer', 'name avatar')
       .sort({ updatedAt: -1 })
       .lean();
 
-    // Attach active innings score for each live match
-    const enrichedMatches = await Promise.all(
-      liveMatches.map(async (m) => {
-        const activeInnings = await Innings.findOne({
-          match: m._id,
-          inningsNumber: m.currentInnings || 1,
-        })
-          .populate('battingTeam', 'name logo')
-          .populate('bowlingTeam', 'name logo')
-          .populate({
-            path: 'currentBatters.striker',
-            populate: { path: 'user', select: 'name avatar' },
-          })
-          .populate({
-            path: 'currentBatters.nonStriker',
-            populate: { path: 'user', select: 'name avatar' },
-          })
-          .populate({
-            path: 'currentBowler',
-            populate: { path: 'user', select: 'name avatar' },
-          })
-          .lean();
+    if (liveMatches.length === 0) return [];
 
-        return {
-          ...m,
-          activeInnings,
-        };
+    const matchIds = liveMatches.map((m: any) => m._id);
+    const inningsNumbers = liveMatches.map((m: any) => m.currentInnings || 1);
+    const inningsList = await Innings.find({
+      match: { $in: matchIds },
+      inningsNumber: { $in: inningsNumbers },
+    })
+      .populate('battingTeam', 'name logo')
+      .populate('bowlingTeam', 'name logo')
+      .populate({
+        path: 'currentBatters.striker',
+        populate: { path: 'user', select: 'name avatar' },
       })
-    );
+      .populate({
+        path: 'currentBatters.nonStriker',
+        populate: { path: 'user', select: 'name avatar' },
+      })
+      .populate({
+        path: 'currentBowler',
+        populate: { path: 'user', select: 'name avatar' },
+      })
+      .lean();
 
-    return enrichedMatches;
+    const inningsByMatch = new Map<string, any>();
+    for (const innings of inningsList as any[]) {
+      inningsByMatch.set(`${String(innings.match)}:${innings.inningsNumber}`, innings);
+    }
+
+    return liveMatches.map((m: any) => ({
+      ...m,
+      activeInnings: inningsByMatch.get(`${String(m._id)}:${m.currentInnings || 1}`) || null,
+    }));
   }
 
   /**
@@ -824,6 +846,7 @@ export class MatchService {
       .populate('teamB', 'name logo location')
       .populate('tournament', 'name format matchFormat')
       .sort({ matchDate: 1 })
+      .limit(100)
       .lean();
 
     return upcomingMatches;
@@ -843,25 +866,30 @@ export class MatchService {
         populate: { path: 'user', select: 'name avatar' },
       })
       .sort({ matchDate: -1, updatedAt: -1 })
+      .limit(100)
       .lean();
 
-    // Attach innings overview
-    const enrichedCompleted = await Promise.all(
-      completedMatches.map(async (m) => {
-        const inningsList = await Innings.find({ match: m._id })
-          .populate('battingTeam', 'name logo')
-          .select('inningsNumber battingTeam totalRuns totalWickets totalOvers totalBalls extras target status')
-          .sort({ inningsNumber: 1 })
-          .lean();
+    if (completedMatches.length === 0) return [];
 
-        return {
-          ...m,
-          innings: inningsList,
-        };
-      })
-    );
+    const matchIds = completedMatches.map((m: any) => m._id);
+    const inningsList = await Innings.find({ match: { $in: matchIds } })
+      .populate('battingTeam', 'name logo')
+      .select('inningsNumber battingTeam totalRuns totalWickets totalOvers totalBalls extras target status match')
+      .sort({ inningsNumber: 1 })
+      .lean();
 
-    return enrichedCompleted;
+    const inningsByMatch = new Map<string, any[]>();
+    for (const innings of inningsList as any[]) {
+      const key = String(innings.match);
+      const list = inningsByMatch.get(key) || [];
+      list.push(innings);
+      inningsByMatch.set(key, list);
+    }
+
+    return completedMatches.map((m: any) => ({
+      ...m,
+      innings: inningsByMatch.get(String(m._id)) || [],
+    }));
   }
 
   /**
@@ -876,7 +904,7 @@ export class MatchService {
       .populate('teamA', 'name logo location captain')
       .populate('teamB', 'name logo location captain')
       .populate('tournament', 'name format matchFormat ballType')
-      .populate('scorer', 'name email avatar phone')
+      .populate('scorer', 'name avatar')
       .populate('toss.winner', 'name logo')
       .populate('result.winner', 'name logo')
       .populate({

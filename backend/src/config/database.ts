@@ -1,5 +1,6 @@
 import mongoose, { ConnectOptions } from 'mongoose';
 import config from './env';
+import { logger } from '../utils/logger';
 
 const MAX_RETRIES = 5;
 const RETRY_INTERVAL_MS = 5000;
@@ -36,18 +37,20 @@ export const connectDatabase = async (
       return conn;
     } catch (err) {
       retryCount += 1;
-      console.error(`[Database] MongoDB connection error (Attempt ${retryCount}/${MAX_RETRIES}):`, err);
+      logger.error(`[Database] MongoDB connection error (Attempt ${retryCount}/${MAX_RETRIES})`, {
+        message: err instanceof Error ? err.message : 'Unknown error',
+      });
 
       if (retryCount >= MAX_RETRIES) {
         isConnecting = false;
-        console.error('[Database] Maximum retry attempts reached. Could not connect to MongoDB.');
+        logger.error('[Database] Maximum retry attempts reached. Could not connect to MongoDB.');
         if (config.isProduction) {
           process.exit(1);
         }
         throw err;
       }
 
-      console.info(`[Database] Retrying connection in ${RETRY_INTERVAL_MS / 1000}s...`);
+      logger.info(`[Database] Retrying connection in ${RETRY_INTERVAL_MS / 1000}s...`);
       await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
       return connectWithRetry();
     }
@@ -62,41 +65,27 @@ export const connectDatabase = async (
 export const disconnectDatabase = async (): Promise<void> => {
   if (mongoose.connection.readyState !== 0) {
     await mongoose.disconnect();
-    console.info('[Database] MongoDB disconnected cleanly.');
+    logger.info('[Database] MongoDB disconnected cleanly.');
   }
 };
 
 // Setup connection event listeners
 mongoose.connection.on('connected', () => {
-  console.info(`[Database] MongoDB connected successfully to ${mongoose.connection.host}:${mongoose.connection.port}/${mongoose.connection.name}`);
+  logger.info(`[Database] MongoDB connected to ${mongoose.connection.host}:${mongoose.connection.port}/${mongoose.connection.name}`);
 });
 
 mongoose.connection.on('error', (err) => {
-  console.error('[Database] MongoDB connection error encountered:', err);
+  logger.error('[Database] MongoDB connection error encountered', {
+    message: err instanceof Error ? err.message : 'Unknown error',
+  });
 });
 
 mongoose.connection.on('disconnected', () => {
-  console.warn('[Database] MongoDB connection disconnected.');
+  logger.warn('[Database] MongoDB connection disconnected.');
 });
 
 mongoose.connection.on('reconnected', () => {
-  console.info('[Database] MongoDB connection re-established.');
+  logger.info('[Database] MongoDB connection re-established.');
 });
-
-// Setup graceful shutdown handlers
-const handleGracefulShutdown = async (signal: string): Promise<void> => {
-  console.info(`[Database] Received ${signal}. Closing MongoDB connection...`);
-  try {
-    await disconnectDatabase();
-    console.info('[Database] MongoDB connection closed due to app termination.');
-    process.exit(0);
-  } catch (error) {
-    console.error('[Database] Error closing MongoDB connection during shutdown:', error);
-    process.exit(1);
-  }
-};
-
-process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
-process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
 
 export default connectDatabase;

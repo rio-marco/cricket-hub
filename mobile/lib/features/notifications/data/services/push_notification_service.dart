@@ -55,7 +55,7 @@ class FirebasePushNotificationPlatform implements PushNotificationPlatform {
   final FirebaseMessaging _messaging;
 
   FirebasePushNotificationPlatform({FirebaseMessaging? messaging})
-      : _messaging = messaging ?? FirebaseMessaging.instance;
+    : _messaging = messaging ?? FirebaseMessaging.instance;
 
   @override
   Future<bool> initialize() async {
@@ -106,9 +106,9 @@ class FirebasePushNotificationPlatform implements PushNotificationPlatform {
       FirebaseMessaging.onMessage.map(PushNotificationMessage.fromRemote);
 
   @override
-  Stream<PushNotificationMessage> get onMessageOpenedApp =>
-      FirebaseMessaging.onMessageOpenedApp
-          .map(PushNotificationMessage.fromRemote);
+  Stream<PushNotificationMessage> get onMessageOpenedApp => FirebaseMessaging
+      .onMessageOpenedApp
+      .map(PushNotificationMessage.fromRemote);
 
   @override
   Future<PushNotificationMessage?> getInitialMessage() async {
@@ -127,13 +127,16 @@ class PushNotificationService {
 
   bool _initialized = false;
   bool _listening = false;
+  StreamSubscription<String>? _tokenRefreshSub;
+  StreamSubscription<PushNotificationMessage>? _messageSub;
+  StreamSubscription<PushNotificationMessage>? _tapSub;
 
   PushNotificationService({
     required this._platform,
     required this._repository,
     required this._storage,
-  })  : _messages = StreamController<PushNotificationMessage>.broadcast(),
-        _taps = StreamController<PushNotificationMessage>.broadcast();
+  }) : _messages = StreamController<PushNotificationMessage>.broadcast(),
+       _taps = StreamController<PushNotificationMessage>.broadcast();
 
   Stream<PushNotificationMessage> get messages => _messages.stream;
   Stream<PushNotificationMessage> get taps => _taps.stream;
@@ -176,12 +179,23 @@ class PushNotificationService {
 
     final accessToken = await _storage.getToken();
     if (accessToken != null && accessToken.isNotEmpty) {
-      await _repository.removeDeviceToken(token);
+      try {
+        await _repository.removeDeviceToken(token);
+      } catch (_) {
+        // Best effort: token will be cleaned up on next successful auth/session.
+      }
     }
     await _storage.deletePushToken();
   }
 
   Future<void> dispose() async {
+    await _tokenRefreshSub?.cancel();
+    await _messageSub?.cancel();
+    await _tapSub?.cancel();
+    _tokenRefreshSub = null;
+    _messageSub = null;
+    _tapSub = null;
+    _listening = false;
     await _messages.close();
     await _taps.close();
   }
@@ -190,12 +204,12 @@ class PushNotificationService {
     if (_listening) return;
     _listening = true;
 
-    _platform.onTokenRefresh.listen((token) async {
+    _tokenRefreshSub = _platform.onTokenRefresh.listen((token) async {
       await _storage.savePushToken(token);
       await registerCurrentToken();
     });
-    _platform.onMessage.listen(_handleMessage);
-    _platform.onMessageOpenedApp.listen(_handleTap);
+    _messageSub = _platform.onMessage.listen(_handleMessage);
+    _tapSub = _platform.onMessageOpenedApp.listen(_handleTap);
     _platform.getInitialMessage().then((message) {
       if (message != null) _handleTap(message);
     });

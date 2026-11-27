@@ -11,7 +11,9 @@ import {
   undoBall,
 } from '../controllers/scoring.controller';
 import { protect } from '../middlewares/auth.middleware';
+import { apiLimiter, scoringLimiter } from '../middlewares/rateLimiter.middleware';
 import { validate } from '../middlewares/validate.middleware';
+import { idParamSchema, matchIdParamSchema, idDeliveryIdParamSchema } from '../validators/params.validator';
 import {
   completeMatchSchema,
   correctBallSchema,
@@ -24,21 +26,23 @@ import {
 
 const router = Router();
 
-router.get('/:matchId', validate(scoringQuerySchema, 'query'), getScoringState);
-router.get('/:matchId/state', validate(scoringQuerySchema, 'query'), getScoringState);
-router.get('/:matchId/innings/:inningsNumber', getScoringInnings);
-router.get('/:matchId/commentary', validate(scoringQuerySchema, 'query'), getScoringCommentary);
+router.get('/:matchId', apiLimiter, validate(matchIdParamSchema, 'params'), validate(scoringQuerySchema, 'query'), getScoringState);
+router.get('/:matchId/state', apiLimiter, validate(matchIdParamSchema, 'params'), validate(scoringQuerySchema, 'query'), getScoringState);
+router.get('/:matchId/innings/:inningsNumber', apiLimiter, validate(matchIdParamSchema, 'params'), getScoringInnings);
+router.get('/:matchId/commentary', apiLimiter, validate(matchIdParamSchema, 'params'), validate(scoringQuerySchema, 'query'), getScoringCommentary);
 
-router.post('/:matchId/start-innings', protect, validate(startInningsSchema, 'body'), startInnings);
-router.post('/:matchId/ball', protect, validate(recordBallSchema, 'body'), recordBall);
-router.post('/:matchId/undo', protect, validate(undoBallSchema, 'body'), undoBall);
+router.post('/:matchId/start-innings', scoringLimiter, protect, validate(matchIdParamSchema, 'params'), validate(startInningsSchema, 'body'), startInnings);
+router.post('/:matchId/ball', scoringLimiter, protect, validate(matchIdParamSchema, 'params'), validate(recordBallSchema, 'body'), recordBall);
+router.post('/:matchId/undo', scoringLimiter, protect, validate(matchIdParamSchema, 'params'), validate(undoBallSchema, 'body'), undoBall);
 router.post(
   '/:matchId/ball/:deliveryId/correct',
+  scoringLimiter,
   protect,
+  validate(idDeliveryIdParamSchema, 'params'),
   validate(correctBallSchema, 'body'),
   correctBall
 );
-router.post('/:matchId/innings-end', protect, validate(inningsEndSchema, 'body'), endInnings);
-router.post('/:matchId/complete', protect, validate(completeMatchSchema, 'body'), completeMatch);
+router.post('/:matchId/innings-end', scoringLimiter, protect, validate(matchIdParamSchema, 'params'), validate(inningsEndSchema, 'body'), endInnings);
+router.post('/:matchId/complete', scoringLimiter, protect, validate(matchIdParamSchema, 'params'), validate(completeMatchSchema, 'body'), completeMatch);
 
 export default router;

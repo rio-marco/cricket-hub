@@ -163,7 +163,7 @@ export const updateTournamentStatusSchema = Joi.object({
 export const tournamentQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(10),
-  sort: Joi.string().trim().max(100),
+  sort: Joi.string().valid('createdAt','-createdAt','startDate','-startDate','name','-name','status','-status','updatedAt','-updatedAt'),
   order: Joi.string().trim().valid('asc', 'desc'),
   status: Joi.string().valid(...Object.values(TournamentStatus)),
   city: Joi.string().trim().max(100),

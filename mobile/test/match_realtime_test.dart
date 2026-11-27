@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/features/matches/data/repositories/scoring_repository_impl.dart';
 import 'package:mobile/features/matches/data/realtime/match_realtime_event.dart';
@@ -16,47 +18,60 @@ class FakeScoringRepository implements ScoringRepository {
   Future<ScoringSnapshot> startInnings(
     String matchId,
     Map<String, dynamic> data,
-  ) async =>
-      snapshot;
+  ) async => snapshot;
 
   @override
   Future<ScoringSnapshot> recordBall(
     String matchId,
     Map<String, dynamic> data,
-  ) async =>
-      snapshot;
+  ) async => snapshot;
 
   @override
   Future<ScoringSnapshot> undo(
     String matchId,
     Map<String, dynamic> data,
-  ) async =>
-      snapshot;
+  ) async => snapshot;
 
   @override
   Future<ScoringSnapshot> correct(
     String matchId,
     String deliveryId,
     Map<String, dynamic> data,
-  ) async =>
-      snapshot;
+  ) async => snapshot;
 
   @override
   Future<ScoringSnapshot> endInnings(
     String matchId,
     Map<String, dynamic> data,
-  ) async =>
-      snapshot;
+  ) async => snapshot;
 
   @override
   Future<ScoringSnapshot> completeMatch(
     String matchId,
     Map<String, dynamic> data,
-  ) async =>
-      snapshot;
+  ) async => snapshot;
 
   @override
   Future<List<ScoringDelivery>> getCommentary(String matchId) async => const [];
+}
+
+class SlowScoringRepository extends FakeScoringRepository {
+  SlowScoringRepository(super.snapshot);
+  int recordBallCalls = 0;
+  final Completer<ScoringSnapshot> _completer = Completer<ScoringSnapshot>();
+
+  @override
+  Future<ScoringSnapshot> recordBall(
+    String matchId,
+    Map<String, dynamic> data,
+  ) {
+    recordBallCalls++;
+    return _completer.future;
+  }
+
+  void complete() {
+    if (!_completer.isCompleted) _completer.complete(snapshot);
+  }
 }
 
 ScoringSnapshot snapshotWithVersion(int version) {
@@ -119,32 +134,35 @@ void main() {
     expect(event.data['delivery']?['runs']?['batter'], 4);
   });
 
-  test('scoring state applies newer socket updates and rejects stale ones', () async {
-    final repository = FakeScoringRepository(snapshotWithVersion(1));
-    final notifier = ScoringNotifier(repository, 'm1');
-    await notifier.load();
+  test(
+    'scoring state applies newer socket updates and rejects stale ones',
+    () async {
+      final repository = FakeScoringRepository(snapshotWithVersion(1));
+      final notifier = ScoringNotifier(repository, 'm1');
+      await notifier.load();
 
-    notifier.applyRealtimeEvent(
-      stateEvent(eventId: 'm1:key-2:BALL', matchId: 'm1', version: 2),
-    );
-    expect(notifier.state.activeInnings?['stateVersion'], 2);
-    expect(notifier.state.activeInnings?['totalRuns'], 8);
+      notifier.applyRealtimeEvent(
+        stateEvent(eventId: 'm1:key-2:BALL', matchId: 'm1', version: 2),
+      );
+      expect(notifier.state.activeInnings?['stateVersion'], 2);
+      expect(notifier.state.activeInnings?['totalRuns'], 8);
 
-    notifier.applyRealtimeEvent(
-      stateEvent(eventId: 'm1:key-3:BALL', matchId: 'm1', version: 1),
-    );
-    expect(notifier.state.activeInnings?['stateVersion'], 2);
+      notifier.applyRealtimeEvent(
+        stateEvent(eventId: 'm1:key-3:BALL', matchId: 'm1', version: 1),
+      );
+      expect(notifier.state.activeInnings?['stateVersion'], 2);
 
-    notifier.applyRealtimeEvent(
-      stateEvent(
-        eventId: 'm1:key-2:BALL',
-        matchId: 'm1',
-        version: 2,
-        totalRuns: 99,
-      ),
-    );
-    expect(notifier.state.activeInnings?['totalRuns'], 8);
-  });
+      notifier.applyRealtimeEvent(
+        stateEvent(
+          eventId: 'm1:key-2:BALL',
+          matchId: 'm1',
+          version: 2,
+          totalRuns: 99,
+        ),
+      );
+      expect(notifier.state.activeInnings?['totalRuns'], 8);
+    },
+  );
 
   test('socket errors are surfaced in scoring UI state', () async {
     final repository = FakeScoringRepository(snapshotWithVersion(1));
@@ -159,5 +177,19 @@ void main() {
     );
 
     expect(notifier.state.errorMessage, 'Access denied');
+  });
+
+  test('duplicate save requests are guarded while saving', () async {
+    final repository = SlowScoringRepository(snapshotWithVersion(1));
+    final notifier = ScoringNotifier(repository, 'm1');
+    await notifier.load();
+
+    final first = notifier.recordRuns(1);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final second = await notifier.recordRuns(2);
+    expect(second, isFalse);
+    repository.complete();
+    expect(await first, isTrue);
+    expect(repository.recordBallCalls, 1);
   });
 }

@@ -49,6 +49,10 @@ export class TeamService {
   /**
    * Create a new team, assign user as owner, and enroll owner if player profile exists
    */
+  private escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
   public async createTeam(
     userId: string | Types.ObjectId,
     data: ICreateTeamData
@@ -57,7 +61,7 @@ export class TeamService {
 
     // Check for duplicate team name (case-insensitive)
     const existingTeam = await Team.findOne({
-      name: { $regex: new RegExp(`^${trimmedName}$`, 'i') },
+      name: { $regex: new RegExp(`^${this.escapeRegExp(trimmedName)}$`, 'i') },
     });
     if (existingTeam) {
       throw ApiError.conflict(MESSAGES.TEAM.NAME_TAKEN || 'A team with this name already exists.');
@@ -111,7 +115,7 @@ export class TeamService {
   public async getTeams(
     query: Record<string, any> = {}
   ): Promise<IPaginatedResult<ITeam>> {
-    const { page, limit, skip, sort } = getPaginationParams(query, 10, 100, '-createdAt');
+    const { page, limit, skip, sort } = getPaginationParams(query, 10, 100, '-createdAt', ['createdAt','updatedAt','name','location','isActive']);
 
     const filter: Record<string, any> = {};
 
@@ -124,13 +128,13 @@ export class TeamService {
 
     // Text search on name or location
     if (query.search) {
-      const searchRegex = new RegExp(String(query.search).trim(), 'i');
+      const searchRegex = new RegExp(this.escapeRegExp(String(query.search).trim()), 'i');
       filter.$or = [{ name: searchRegex }, { location: searchRegex }];
     }
 
     // Exact or partial location filter
     if (query.location) {
-      filter.location = new RegExp(String(query.location).trim(), 'i');
+      filter.location = new RegExp(this.escapeRegExp(String(query.location).trim()), 'i');
     }
 
     if (query.owner && mongoose.Types.ObjectId.isValid(query.owner)) {
@@ -142,7 +146,7 @@ export class TeamService {
         .sort(sort as any)
         .skip(skip)
         .limit(limit)
-        .populate('owner', 'name email phone avatar')
+        .populate('owner', 'name avatar')
         .populate({
           path: 'captain',
           populate: { path: 'user', select: 'name avatar' },
@@ -174,18 +178,18 @@ export class TeamService {
     }
 
     const team = await Team.findById(id)
-      .populate('owner', 'name email phone avatar role')
+      .populate('owner', 'name avatar role')
       .populate({
         path: 'captain',
-        populate: { path: 'user', select: 'name email phone avatar' },
+        populate: { path: 'user', select: 'name avatar' },
       })
       .populate({
         path: 'viceCaptain',
-        populate: { path: 'user', select: 'name email phone avatar' },
+        populate: { path: 'user', select: 'name avatar' },
       })
       .populate({
         path: 'wicketkeeper',
-        populate: { path: 'user', select: 'name email phone avatar' },
+        populate: { path: 'user', select: 'name avatar' },
       })
       .lean();
 
@@ -200,7 +204,7 @@ export class TeamService {
     })
       .populate({
         path: 'player',
-        populate: { path: 'user', select: 'name email phone avatar' },
+        populate: { path: 'user', select: 'name avatar' },
       })
       .sort({ role: 1, joinedAt: 1 })
       .lean();
@@ -238,7 +242,7 @@ export class TeamService {
     if (data.name && data.name.trim().toLowerCase() !== team.name.toLowerCase()) {
       const trimmedName = data.name.trim();
       const nameConflict = await Team.findOne({
-        name: { $regex: new RegExp(`^${trimmedName}$`, 'i') },
+        name: { $regex: new RegExp(`^${this.escapeRegExp(trimmedName)}$`, 'i') },
         _id: { $ne: team._id },
       });
       if (nameConflict) {
@@ -333,7 +337,7 @@ export class TeamService {
     await team.save();
 
     const updated = await Team.findById(team._id)
-      .populate('owner', 'name email phone avatar')
+      .populate('owner', 'name avatar')
       .populate({
         path: 'captain',
         populate: { path: 'user', select: 'name avatar' },
@@ -431,7 +435,7 @@ export class TeamService {
       return TeamMember.findById(existingMember._id)
         .populate({
           path: 'player',
-          populate: { path: 'user', select: 'name email phone avatar' },
+          populate: { path: 'user', select: 'name avatar' },
         })
         .lean();
     }
@@ -447,7 +451,7 @@ export class TeamService {
     return TeamMember.findById(newMember._id)
       .populate({
         path: 'player',
-        populate: { path: 'user', select: 'name email phone avatar' },
+        populate: { path: 'user', select: 'name avatar' },
       })
       .lean();
   }
@@ -533,7 +537,7 @@ export class TeamService {
     })
       .populate({
         path: 'player',
-        populate: { path: 'user', select: 'name email phone avatar' },
+        populate: { path: 'user', select: 'name avatar' },
       })
       .sort({ role: 1, joinedAt: 1 })
       .lean();
@@ -614,9 +618,9 @@ export class TeamService {
       .populate('team', 'name logo location')
       .populate({
         path: 'player',
-        populate: { path: 'user', select: 'name email avatar' },
+        populate: { path: 'user', select: 'name avatar' },
       })
-      .populate('invitedBy', 'name email avatar')
+      .populate('invitedBy', 'name avatar')
       .lean();
   }
 
@@ -687,7 +691,7 @@ export class TeamService {
 
     return TeamInvitation.findById(joinRequest._id)
       .populate('team', 'name logo location')
-      .populate('invitedBy', 'name email avatar')
+      .populate('invitedBy', 'name avatar')
       .lean();
   }
 
@@ -801,9 +805,9 @@ export class TeamService {
       .populate('team', 'name logo location')
       .populate({
         path: 'player',
-        populate: { path: 'user', select: 'name email avatar' },
+        populate: { path: 'user', select: 'name avatar' },
       })
-      .populate('invitedBy', 'name email avatar')
+      .populate('invitedBy', 'name avatar')
       .lean();
   }
 
@@ -830,10 +834,10 @@ export class TeamService {
     return TeamInvitation.find({ team: teamId })
       .populate({
         path: 'player',
-        populate: { path: 'user', select: 'name email phone avatar' },
+        populate: { path: 'user', select: 'name avatar' },
       })
-      .populate('user', 'name email avatar')
-      .populate('invitedBy', 'name email avatar')
+      .populate('user', 'name avatar')
+      .populate('invitedBy', 'name avatar')
       .sort('-createdAt')
       .lean();
   }
@@ -854,10 +858,10 @@ export class TeamService {
       type: InvitationType.INVITE,
     })
       .populate('team', 'name logo location owner')
-      .populate('invitedBy', 'name email avatar')
+      .populate('invitedBy', 'name avatar')
       .populate({
         path: 'player',
-        populate: { path: 'user', select: 'name email avatar' },
+        populate: { path: 'user', select: 'name avatar' },
       })
       .sort('-createdAt')
       .lean();
@@ -941,7 +945,7 @@ export class TeamService {
     return TeamMember.findById(member._id)
       .populate({
         path: 'player',
-        populate: { path: 'user', select: 'name email phone avatar' },
+        populate: { path: 'user', select: 'name avatar' },
       })
       .lean();
   }
@@ -1068,7 +1072,7 @@ export class TeamService {
       throw ApiError.notFound(MESSAGES.TEAM.NOT_FOUND || 'Team not found.');
     }
 
-    const { page, limit, skip, sort } = getPaginationParams(query, 10, 50, '-matchDate');
+    const { page, limit, skip, sort } = getPaginationParams(query, 10, 50, '-matchDate', ['matchDate','createdAt','updatedAt','status']);
     const teamObjId = new Types.ObjectId(teamId.toString());
 
     const filter: Record<string, any> = {

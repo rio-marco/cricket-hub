@@ -179,10 +179,11 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> logout({String? refreshToken}) async {
+  Future<void> logout({String? refreshToken, String? fcmToken}) async {
     try {
       final token = refreshToken ?? await _secureStorage.getRefreshToken();
-      await _remoteDataSource.logout(token);
+      final pushToken = fcmToken ?? await _secureStorage.getPushToken();
+      await _remoteDataSource.logout(refreshToken: token, fcmToken: pushToken);
     } catch (_) {
       // Ignore network errors on logout so local credentials are always cleared
     } finally {

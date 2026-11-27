@@ -73,6 +73,7 @@ export interface IInnings {
   totalWickets: number;
   totalOvers: number;
   totalBalls: number;
+  nextSequence: number;
   extras: IExtras;
   currentBatters?: ICurrentBatters;
   currentBowler?: Types.ObjectId;
@@ -221,6 +222,11 @@ const inningsSchema = new Schema<IInnings, InningsModel>(
       type: Number,
       default: 0,
       min: 0,
+    },
+    nextSequence: {
+      type: Number,
+      default: 1,
+      min: 1,
     },
     extras: {
       type: extrasSchema,

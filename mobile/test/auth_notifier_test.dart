@@ -80,7 +80,7 @@ class FakeAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> logout({String? refreshToken}) async {}
+  Future<void> logout({String? refreshToken, String? fcmToken}) async {}
 
   @override
   Future<User> getProfile() async => _user;

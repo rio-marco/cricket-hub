@@ -258,10 +258,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   /// Logs out of the current user session and clears credentials.
-  Future<void> logout() async {
+  Future<void> logout({String? fcmToken}) async {
     state = const AuthState.loading();
     try {
-      await _authRepository.logout();
+      await _authRepository.logout(fcmToken: fcmToken);
     } catch (_) {
       // Continue clearing local state
     } finally {

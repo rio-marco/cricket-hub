@@ -3,7 +3,7 @@ import { Server, Socket } from 'socket.io';
 import Auction from '../models/Auction';
 import auctionService from '../services/auction.service';
 import { logger } from '../utils/logger';
-import { socketAuth } from './auth';
+import { checkSocketRateLimit, clearSocketRateLimit } from './rateLimit';
 import {
   AUCTION_EVENTS,
   auctionControllerRoom,
@@ -62,8 +62,25 @@ const respondError = (
   ack?.({ ok: false, error });
 };
 
+const enforceSocketRateLimit = (
+  socket: AuctionSocket,
+  event: string,
+  auctionId: string,
+  ack?: (response: SocketAck) => void,
+  max = 60
+): boolean => {
+  const limit = checkSocketRateLimit(socket.id, { keyPrefix: `auction:${event}`, windowMs: 60_000, max });
+  if (limit.allowed) return true;
+  respondError(
+    socket,
+    auctionId,
+    { code: 'RATE_LIMITED', message: `Too many ${event} requests. Retry after ${Math.ceil(limit.retryAfterMs / 1000)}s.` },
+    ack
+  );
+  return false;
+};
+
 export const registerAuctionHandlers = (io: AuctionSocketServer): void => {
-  io.use(socketAuth);
 
   io.on('connection', (socket) => {
     const user = socket.data.user;
@@ -74,6 +91,7 @@ export const registerAuctionHandlers = (io: AuctionSocketServer): void => {
 
     socket.on(AUCTION_EVENTS.join, async (payload, ack) => {
       const auctionId = String(payload?.auctionId || '');
+      if (!enforceSocketRateLimit(socket, AUCTION_EVENTS.join, auctionId, ack)) return;
       try {
         const access = await resolveAccess(auctionId, user.id);
         await socket.join(auctionRoom(auctionId));
@@ -116,6 +134,7 @@ export const registerAuctionHandlers = (io: AuctionSocketServer): void => {
 
     socket.on(AUCTION_EVENTS.sync, async (payload, ack) => {
       const auctionId = String(payload?.auctionId || '');
+      if (!enforceSocketRateLimit(socket, AUCTION_EVENTS.sync, auctionId, ack)) return;
       try {
         const access = await resolveAccess(auctionId, user.id);
         const state = await auctionService.getState(auctionId, user.id);
@@ -135,6 +154,7 @@ export const registerAuctionHandlers = (io: AuctionSocketServer): void => {
 
     socket.on(AUCTION_EVENTS.bid, async (payload, ack) => {
       const auctionId = String(payload?.auctionId || '');
+      if (!enforceSocketRateLimit(socket, AUCTION_EVENTS.bid, auctionId, ack, 20)) return;
       try {
         const result = await auctionService.placeBid(auctionId, user.id, {
           team: String(payload?.team || ''),
@@ -167,6 +187,7 @@ export const registerAuctionHandlers = (io: AuctionSocketServer): void => {
     });
 
     socket.on('disconnect', (reason) => {
+      clearSocketRateLimit(socket.id);
       socket.data.auctionRooms.clear();
       logger.info(`[Socket.IO] Auction client disconnected: ${socket.id} (${reason})`);
     });

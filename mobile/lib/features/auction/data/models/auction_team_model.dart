@@ -8,7 +8,7 @@ class AuctionTeamModel extends AuctionTeam {
     required super.teamId,
     super.teamName,
     super.ownerId,
-    required super.initialBudget,
+    super.initialBudget = 0,
     super.spent,
     super.pendingCommitment,
     super.playersPurchased,
@@ -19,6 +19,7 @@ class AuctionTeamModel extends AuctionTeam {
 
   factory AuctionTeamModel.fromJson(Map<String, dynamic> json) {
     final teamRef = normalizeAuctionMapOrNull(json['team']);
+    final hasFinancials = json['initialBudget'] != null || json['remainingBudget'] != null || json['availableBudget'] != null;
     final initialBudget = auctionDouble(json['initialBudget']);
     final spent = auctionDouble(json['spent']);
     final pendingCommitment = auctionDouble(json['pendingCommitment']);

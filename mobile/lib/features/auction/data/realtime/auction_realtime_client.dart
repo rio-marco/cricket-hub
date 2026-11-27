@@ -32,6 +32,25 @@ abstract class AuctionRealtimeClient {
   Future<void> dispose();
 }
 
+typedef AuctionSocketBuilder = io.Socket Function(String url, String token);
+
+io.Socket _defaultAuctionSocketBuilder(String url, String token) {
+  return io.io(
+    url,
+    io.OptionBuilder()
+        .enableForceNew()
+        .setTransports(['websocket', 'polling'])
+        .enableAutoConnect()
+        .enableReconnection()
+        .setReconnectionAttempts(8)
+        .setReconnectionDelay(1000)
+        .setReconnectionDelayMax(10000)
+        .setAuth({'token': token})
+        .setExtraHeaders({'Authorization': 'Bearer $token'})
+        .build(),
+  );
+}
+
 class SocketIOAuctionRealtimeClient implements AuctionRealtimeClient {
   static const _serverEvents = <String>[
     'connection:status',
@@ -50,6 +69,7 @@ class SocketIOAuctionRealtimeClient implements AuctionRealtimeClient {
 
   final String _url;
   final RealtimeTokenProvider _tokenProvider;
+  final AuctionSocketBuilder _socketBuilder;
   final StreamController<AuctionRealtimeEvent> _events =
       StreamController<AuctionRealtimeEvent>.broadcast();
   final Set<String> _rooms = <String>{};
@@ -58,11 +78,16 @@ class SocketIOAuctionRealtimeClient implements AuctionRealtimeClient {
   io.Socket? _socket;
   String? _token;
   Future<void>? _connecting;
+  bool _connectingIntent = false;
+  String? _tokenError;
 
   SocketIOAuctionRealtimeClient({
-    required this._url,
-    required this._tokenProvider,
-  });
+    required String url,
+    required RealtimeTokenProvider tokenProvider,
+    AuctionSocketBuilder? socketBuilder,
+  }) : _url = url,
+       _tokenProvider = tokenProvider,
+       _socketBuilder = socketBuilder ?? _defaultAuctionSocketBuilder;
 
   @override
   Stream<AuctionRealtimeEvent> get events => _events.stream;
@@ -74,11 +99,16 @@ class SocketIOAuctionRealtimeClient implements AuctionRealtimeClient {
   bool get isConnected => _socket?.connected ?? false;
 
   @override
-  Future<void> connect() => _ensureConnected();
+  Future<void> connect() async {
+    _connectingIntent = true;
+    _tokenError = null;
+    await _ensureConnected();
+  }
 
   @override
   Future<void> joinAuction(String auctionId) async {
     if (!_rooms.add(auctionId)) return;
+    _connectingIntent = true;
     await _ensureConnected();
     await _joinCurrentRoom(auctionId);
   }
@@ -104,6 +134,8 @@ class SocketIOAuctionRealtimeClient implements AuctionRealtimeClient {
 
   @override
   void disconnect() {
+    _connectingIntent = false;
+    _tokenError = null;
     _rooms.clear();
     _joinedRooms.clear();
     _teardownSocket();
@@ -116,6 +148,7 @@ class SocketIOAuctionRealtimeClient implements AuctionRealtimeClient {
   }
 
   Future<void> _ensureConnected() async {
+    if (!_connectingIntent) return;
     final token = await _tokenProvider.getToken();
     if (token == null || token.isEmpty) return;
 
@@ -142,37 +175,36 @@ class SocketIOAuctionRealtimeClient implements AuctionRealtimeClient {
   }
 
   Future<void> _createSocket(String token) async {
-    final socket = io.io(
-      _url,
-      io.OptionBuilder()
-        .enableForceNew()
-        .setTransports(['websocket', 'polling'])
-        .enableAutoConnect()
-        .enableReconnection()
-        .setReconnectionAttempts(8)
-        .setReconnectionDelay(1000)
-        .setReconnectionDelayMax(10000)
-        .setAuth({'token': token})
-        .setExtraHeaders({'Authorization': 'Bearer $token'})
-        .build(),
-    );
+    final socket = _socketBuilder(_url, token);
     _socket = socket;
 
     socket.onConnect((_) {
+      _tokenError = null;
       _joinedRooms.clear();
+      _push('connection:status', {
+        'status': 'connected',
+        'connected': true,
+        'socketId': socket.id,
+        'at': DateTime.now().toIso8601String(),
+      });
       for (final auctionId in _rooms.toList()) {
         unawaited(_joinCurrentRoom(auctionId));
       }
     });
-    socket.onDisconnect((_) {
+    socket.onDisconnect((reason) {
       _joinedRooms.clear();
+      _push('connection:status', {
+        'status': 'disconnected',
+        'connected': false,
+        'reason': reason?.toString(),
+        'at': DateTime.now().toIso8601String(),
+      });
     });
-    socket.onConnectError((error) {
-      _pushError('connect_error', error);
-    });
-    socket.onError((error) {
-      _pushError('socket_error', error);
-    });
+    socket.onConnectError((error) => _handleConnectError(error));
+    try {
+      socket.onError((error) => _handleConnectError(error));
+    } catch (_) {}
+
     for (final event in _serverEvents) {
       socket.on(event, (data) => _push(event, data));
     }
@@ -181,9 +213,22 @@ class SocketIOAuctionRealtimeClient implements AuctionRealtimeClient {
   Future<void> _joinCurrentRoom(String auctionId) async {
     if (!isConnected || !_joinedRooms.add(auctionId)) return;
     final ack = await _ack('auction:join', {'auctionId': auctionId});
-    if (ack != null) {
-      _push('auction:state', ack);
+    if (ack == null) return;
+    final ok = auctionBool(ack['ok']) && ack['state'] != null;
+    if (!ok) {
+      _joinedRooms.remove(auctionId);
+      _push('auction:error', {
+        'auctionId': auctionId,
+        'error':
+            ack['error'] ??
+            <String, dynamic>{
+              'code': 'AUCTION_JOIN_FAILED',
+              'message': 'Could not join live auction room.',
+            },
+      });
+      return;
     }
+    _push('auction:state', ack);
   }
 
   Future<Map<String, dynamic>?> _ack(
@@ -220,6 +265,46 @@ class SocketIOAuctionRealtimeClient implements AuctionRealtimeClient {
         'message': error?.toString() ?? 'Realtime connection failed.',
       },
     });
+  }
+
+  void _handleConnectError(dynamic error) {
+    final normalized = normalizeAuctionMapOrNull(error);
+    final message =
+        normalized?['message']?.toString() ?? error?.toString() ?? '';
+    final data = normalizeAuctionMapOrNull(normalized?['data']);
+    final code = data?['code']?.toString() ?? normalized?['code']?.toString();
+
+    if (code == 'TOKEN_EXPIRED' || code == 'INVALID_TOKEN') {
+      if (_tokenError == code) return;
+      _tokenError = code;
+      unawaited(_refreshTokenAndReconnect(code: code!, message: message));
+      return;
+    }
+
+    _pushError(code ?? 'connect_error', message.isEmpty ? error : message);
+  }
+
+  Future<void> _refreshTokenAndReconnect({
+    required String code,
+    String? message,
+  }) async {
+    final refreshedToken = await _tokenProvider.getToken();
+    final currentToken = _token;
+    if (refreshedToken == null || refreshedToken.isEmpty) {
+      _pushError(code, message ?? 'Realtime authentication failed.');
+      disconnect();
+      return;
+    }
+
+    if (currentToken != null && refreshedToken != currentToken) {
+      _teardownSocket();
+      if (_connectingIntent) {
+        await _ensureConnected();
+      }
+      return;
+    }
+
+    _pushError(code, message ?? 'Realtime authentication failed.');
   }
 
   void _teardownSocket() {

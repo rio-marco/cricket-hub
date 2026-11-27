@@ -333,7 +333,7 @@ export const legacyGetDashboardStats = asyncHandler(async (_req: Request, res: R
 });
 
 export const legacyGetAllUsers = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const result = await adminService.listUsers({
+  const result = await adminService.legacyGetAllUsers({
     ...req.query,
     limit: req.query.limit === undefined ? 10 : req.query.limit,
   });
@@ -348,7 +348,7 @@ export const legacyGetAllUsers = asyncHandler(async (req: Request, res: Response
 });
 
 export const legacyGetUserById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const user = await adminService.getUserById(requestParam(req.params.id));
+  const user = await adminService.legacyGetUserById(requestParam(req.params.id));
   ApiResponse.success(res, 200, 'User retrieved successfully.', user);
 });
 
@@ -368,7 +368,7 @@ export const legacyBlockUser = asyncHandler(async (req: Request, res: Response):
 });
 
 export const legacyDeleteUser = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const result = await adminService.softDeleteUser(req, requestParam(req.params.id));
+  const result = await adminService.legacyDeleteUser(req, requestParam(req.params.id), req.body?.reason);
   ApiResponse.success(res, 200, 'User soft-deleted and access revoked successfully.', result);
 });
 

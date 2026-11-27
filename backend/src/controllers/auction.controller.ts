@@ -38,7 +38,7 @@ const respondWithState = (
 };
 
 export const listAuctions = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const result = await auctionService.listAuctions(req.query as Record<string, any>);
+  const result = await auctionService.listAuctions(req.query as Record<string, any>, currentUserId(req));
   res.status(200).json({
     success: true,
     message: MESSAGES.AUCTION.FETCHED,
@@ -49,7 +49,7 @@ export const listAuctions = asyncHandler(async (req: Request, res: Response): Pr
 
 export const listAuctionsByStatus = (status: string) =>
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const result = await auctionService.listAuctions({ ...(req.query as Record<string, any>), status });
+    const result = await auctionService.listAuctions({ ...(req.query as Record<string, any>), status }, currentUserId(req));
     res.status(200).json({
       success: true,
       message: MESSAGES.AUCTION.FETCHED,
@@ -59,19 +59,17 @@ export const listAuctionsByStatus = (status: string) =>
   });
 
 export const getAuction = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user?._id?.toString() || req.user?.id;
-  const auction = await auctionService.getAuctionById(req.params.id as string, userId);
+  const auction = await auctionService.getAuctionById(req.params.id as string, currentUserId(req));
   ApiResponse.success(res, 200, MESSAGES.AUCTION.FETCHED, auction);
 });
 
 export const getAuctionState = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const userId = req.user?._id?.toString() || req.user?.id;
-  const state = await auctionService.getState(req.params.id as string, userId, req.query as Record<string, any>);
+  const state = await auctionService.getState(req.params.id as string, currentUserId(req), req.query as Record<string, any>);
   ApiResponse.success(res, 200, MESSAGES.AUCTION.FETCHED, state);
 });
 
 export const getAuctionPlayers = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const result = await auctionService.getAuctionPlayers(req.params.id as string, req.query as Record<string, any>);
+  const result = await auctionService.getAuctionPlayers(req.params.id as string, req.query as Record<string, any>, currentUserId(req));
   res.status(200).json({
     success: true,
     message: MESSAGES.AUCTION.FETCHED,
@@ -81,22 +79,23 @@ export const getAuctionPlayers = asyncHandler(async (req: Request, res: Response
 });
 
 export const getBidHistory = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const bids = await auctionService.getBidHistory(req.params.id as string, req.query as Record<string, any>);
+  const bids = await auctionService.getBidHistory(req.params.id as string, req.query as Record<string, any>, currentUserId(req));
   ApiResponse.success(res, 200, MESSAGES.AUCTION.FETCHED, bids);
 });
 
 export const getAuctionResults = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const results = await auctionService.getResults(req.params.id as string);
+  const results = await auctionService.getResults(req.params.id as string, currentUserId(req));
   ApiResponse.success(res, 200, MESSAGES.AUCTION.FETCHED, results);
 });
 
 export const getTeamPurse = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const purse = await auctionService.getTeamPurse(req.params.id as string, req.params.teamId as string);
+  const userId = currentUserId(req);
+  const purse = await auctionService.getTeamPurse(req.params.id as string, req.params.teamId as string, userId);
   ApiResponse.success(res, 200, MESSAGES.AUCTION.FETCHED, purse);
 });
 
 export const createAuction = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const result = await auctionService.createAuction(currentUserId(req), req.body);
+  const result = await auctionService.createAuction(currentUserId(req), actionInput(req) as any);
   respondWithState(res, 201, MESSAGES.AUCTION.CREATED, result);
 });
 

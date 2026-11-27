@@ -7,7 +7,7 @@ class AuctionPlayerModel extends AuctionPlayer {
     required super.auctionId,
     required super.playerId,
     super.playerName,
-    required super.basePrice,
+    super.basePrice = 0,
     super.soldPrice,
     super.soldTo,
     super.soldToName,
@@ -39,7 +39,7 @@ class AuctionPlayerModel extends AuctionPlayer {
       auctionId: auctionRef,
       playerId: playerRef,
       playerName: auctionName(json['player']) ?? auctionString(json['playerName']),
-      basePrice: auctionDouble(json['basePrice']),
+      basePrice: json['basePrice'] == null ? 0 : auctionDouble(json['basePrice']),
       soldPrice: json['soldPrice'] == null ? null : auctionDouble(json['soldPrice']),
       soldTo: soldToId == null || soldToId.isEmpty ? null : soldToId,
       soldToName: json['soldTo'] == null ? null : auctionName(json['soldTo']),
@@ -49,7 +49,7 @@ class AuctionPlayerModel extends AuctionPlayer {
       category: auctionString(json['category']),
       setNumber: json['set'] == null ? null : auctionInt(json['set']),
       order: json['order'] == null ? null : auctionInt(json['order']),
-      currentBid: auctionDouble(json['currentBid']),
+      currentBid: json['currentBid'] == null ? 0 : auctionDouble(json['currentBid']),
       highestBidder:
           highestBidderId == null || highestBidderId.isEmpty ? null : highestBidderId,
       highestBidderName: json['highestBidder'] == null

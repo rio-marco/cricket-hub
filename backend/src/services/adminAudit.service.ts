@@ -94,7 +94,7 @@ export class AdminAuditService {
   }
 
   async listAdminActions(query: Record<string, any> = {}): Promise<AdminAuditListResult> {
-    const { page, limit, skip } = getPaginationParams(query, 20, 100, '-createdAt');
+    const { page, limit, skip } = getPaginationParams(query, 20, 100, '-createdAt', ['createdAt','action','targetType']);
     const filter: Record<string, any> = {};
 
     if (query.adminId) filter.adminId = query.adminId;
@@ -119,7 +119,7 @@ export class AdminAuditService {
   }
 
   async listScoringActions(query: Record<string, any> = {}): Promise<AdminAuditListResult> {
-    const { page, limit, skip } = getPaginationParams(query, 20, 100, '-createdAt');
+    const { page, limit, skip } = getPaginationParams(query, 20, 100, '-createdAt', ['createdAt','action','actor']);
     const filter: Record<string, any> = {};
     if (query.action) filter.action = query.action;
     if (query.match) filter.match = query.match;
@@ -157,7 +157,7 @@ export class AdminAuditService {
   }
 
   async listAuctionActions(query: Record<string, any> = {}): Promise<AdminAuditListResult> {
-    const { page, limit, skip } = getPaginationParams(query, 20, 100, '-createdAt');
+    const { page, limit, skip } = getPaginationParams(query, 20, 100, '-createdAt', ['createdAt','action','actor','actorType']);
     const filter: Record<string, any> = {};
     if (query.action) filter.action = query.action;
     if (query.auction) filter.auction = query.auction;

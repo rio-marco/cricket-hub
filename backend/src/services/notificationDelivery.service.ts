@@ -108,16 +108,46 @@ export class NotificationDeliveryService {
     limit: number = env.FIREBASE_PUSH_RETRY_BATCH_SIZE
   ): Promise<DeliveryProcessingResult> {
     const result: DeliveryProcessingResult = { sent: 0, failed: 0, cancelled: 0, processed: 0 };
+    const safeLimit = Math.min(Math.max(1, limit), 100);
     const deliveries = (await NotificationDelivery.find({
       status: NotificationDeliveryStatus.PENDING,
       nextAttemptAt: { $lte: new Date() },
     })
       .sort({ nextAttemptAt: 1 })
-      .limit(Math.max(1, limit))
+      .limit(safeLimit)
       .lean()) as unknown as DeliveryRow[];
 
+    if (deliveries.length === 0) return result;
+
+    const notificationIds = Array.from(
+      new Set(deliveries.map((d) => String(d.notification)))
+    ).map((id) => new Types.ObjectId(id));
+    const deviceTokenIds = Array.from(
+      new Set(deliveries.map((d) => String(d.deviceToken)))
+    ).map((id) => new Types.ObjectId(id));
+
+    const [notifications, deviceTokens] = await Promise.all([
+      Notification.find({ _id: { $in: notificationIds } })
+        .select('_id user type category title body data relatedEntityType relatedEntityId')
+        .lean(),
+      DeviceToken.find({ _id: { $in: deviceTokenIds } })
+        .select('_id token user isActive')
+        .lean(),
+    ]);
+
+    const notificationById = new Map<string, any>(
+      notifications.map((n: any) => [String(n._id), n])
+    );
+    const deviceTokenById = new Map<string, any>(
+      deviceTokens.map((t: any) => [String(t._id), t])
+    );
+
     for (const delivery of deliveries) {
-      const outcome = await this.processOne(delivery);
+      const outcome = await this.processOne(
+        delivery,
+        notificationById.get(String(delivery.notification)),
+        deviceTokenById.get(String(delivery.deviceToken))
+      );
       result.processed += 1;
       if (outcome === 'sent') result.sent += 1;
       if (outcome === 'failed') result.failed += 1;
@@ -127,10 +157,11 @@ export class NotificationDeliveryService {
     return result;
   }
 
-  private async processOne(delivery: DeliveryRow): Promise<'sent' | 'failed' | 'cancelled'> {
-    const notification = (await Notification.findById(delivery.notification)
-      .select('_id type category title body data relatedEntityType relatedEntityId')
-      .lean()) as any;
+  private async processOne(
+    delivery: DeliveryRow,
+    notification?: any,
+    deviceToken?: any
+  ): Promise<'sent' | 'failed' | 'cancelled'> {
     if (!notification) {
       await NotificationDelivery.findByIdAndUpdate(delivery._id, {
         $set: {
@@ -142,15 +173,26 @@ export class NotificationDeliveryService {
       return 'cancelled';
     }
 
-    const deviceToken = (await DeviceToken.findById(delivery.deviceToken)
-      .select('token isActive')
-      .lean()) as any;
     if (!deviceToken || !deviceToken.isActive) {
       await NotificationDelivery.findByIdAndUpdate(delivery._id, {
         $set: {
           status: NotificationDeliveryStatus.CANCELLED,
           lastErrorCode: 'DEVICE_TOKEN_INACTIVE',
           lastError: 'Device token is no longer active.',
+        },
+      });
+      return 'cancelled';
+    }
+
+    if (String(deviceToken.user) !== String(notification.user)) {
+      await DeviceToken.findByIdAndUpdate(deviceToken._id, {
+        $set: { isActive: false, lastError: 'Device token ownership mismatch', lastUsedAt: new Date() },
+      });
+      await NotificationDelivery.findByIdAndUpdate(delivery._id, {
+        $set: {
+          status: NotificationDeliveryStatus.CANCELLED,
+          lastErrorCode: 'DEVICE_TOKEN_OWNER_MISMATCH',
+          lastError: 'Device token ownership mismatch.',
         },
       });
       return 'cancelled';

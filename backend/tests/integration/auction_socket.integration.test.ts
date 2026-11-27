@@ -145,7 +145,7 @@ describe('Socket.IO integration: live auction', () => {
 
     const [bid, state] = await Promise.all([bidPlaced, stateEvent]);
     expect(bid.auctionId).toBe(fixture.auctionId);
-    expect(bid.amount).toBe(10000);
+    expect(bid.amount).toBeUndefined();
     expect(bid.sequenceNumber).toBe(1);
     expect(state.state.currentPlayer.currentBid).toBe(10000);
     expect(await AuctionBid.countDocuments({ auction: fixture.auctionId })).toBe(1);

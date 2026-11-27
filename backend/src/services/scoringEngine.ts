@@ -170,8 +170,8 @@ export const formatOvers = (balls: number, ballsPerOver: number): string =>
 export const calculateStrikeRate = (runs: number, balls: number): number =>
   balls === 0 ? 0 : Number(((runs / balls) * 100).toFixed(2));
 
-export const calculateEconomy = (runs: number, balls: number): number =>
-  balls === 0 ? 0 : Number(((runs / (balls / 6))).toFixed(2));
+export const calculateEconomy = (runs: number, balls: number, ballsPerOver = 6): number =>
+  balls === 0 ? 0 : Number(((runs / (balls / ballsPerOver))).toFixed(2));
 
 const battingStat = (
   state: EngineInningsState,
@@ -510,7 +510,7 @@ export const applyDelivery = (
   });
   state.bowlingStats.forEach((stat) => {
     stat.overs = Number((stat.balls / rules.ballsPerOver).toFixed(2));
-    stat.economy = calculateEconomy(stat.runs, stat.balls);
+    stat.economy = calculateEconomy(stat.runs, stat.balls, rules.ballsPerOver);
   });
 
   const commentary = input.commentary?.trim() || buildCommentary(

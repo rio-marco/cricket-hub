@@ -13,6 +13,12 @@ export interface IUserOtp {
   lastSentAt?: Date;
 }
 
+export interface IAuthLockout {
+  failedAttempts?: number;
+  lockUntil?: Date;
+  lastFailedAt?: Date;
+}
+
 export interface IUser {
   name: string;
   email?: string;
@@ -23,6 +29,7 @@ export interface IUser {
   isVerified?: boolean;
   isBlocked?: boolean;
   otp?: IUserOtp;
+  authLockout?: IAuthLockout;
   fcmToken?: string;
   createdAt?: Date;
   updatedAt?: Date;
@@ -108,6 +115,11 @@ const userSchema = new Schema<IUser, UserModel, IUserMethods>(
     otp: {
       type: userOtpSchema,
       default: undefined,
+    },
+    authLockout: {
+      failedAttempts: { type: Number, default: 0 },
+      lockUntil: { type: Date },
+      lastFailedAt: { type: Date },
     },
     fcmToken: {
       type: String,

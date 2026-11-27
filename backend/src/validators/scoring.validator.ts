@@ -17,7 +17,7 @@ const commonDeliveryFields = {
   batter: objectId('batter').optional(),
   nonStriker: objectId('nonStriker').optional(),
   bowler: objectId('bowler').optional(),
-  expectedVersion: Joi.number().integer().min(0).optional(),
+  expectedVersion: Joi.number().integer().min(0).required(),
   idempotencyKey: Joi.string().trim().min(3).max(120).optional(),
 };
 
@@ -26,7 +26,7 @@ export const startInningsSchema = Joi.object({
   nonStriker: objectId('nonStriker', true),
   bowler: objectId('bowler', true),
   inningsNumber: Joi.number().integer().valid(1, 2).optional(),
-  expectedVersion: Joi.number().integer().min(0).optional(),
+  expectedVersion: Joi.number().integer().min(0).required(),
   idempotencyKey: Joi.string().trim().min(3).max(120).optional(),
 });
 
@@ -49,18 +49,18 @@ export const recordBallSchema = Joi.object({
 });
 
 export const correctBallSchema = recordBallSchema.keys({
-  expectedVersion: Joi.number().integer().min(0).optional(),
+  expectedVersion: Joi.number().integer().min(0).required(),
 });
 
 export const undoBallSchema = Joi.object({
-  expectedVersion: Joi.number().integer().min(0).optional(),
+  expectedVersion: Joi.number().integer().min(0).required(),
   idempotencyKey: Joi.string().trim().min(3).max(120).optional(),
 });
 
 export const inningsEndSchema = Joi.object({
   inningsNumber: Joi.number().integer().valid(1, 2).optional(),
   status: Joi.string().valid('COMPLETED', 'DECLARED').default('COMPLETED'),
-  expectedVersion: Joi.number().integer().min(0).optional(),
+  expectedVersion: Joi.number().integer().min(0).required(),
   idempotencyKey: Joi.string().trim().min(3).max(120).optional(),
 });
 
@@ -70,6 +70,7 @@ export const completeMatchSchema = Joi.object({
   margin: Joi.number().integer().min(0).optional(),
   description: Joi.string().trim().max(300).optional().allow(''),
   playerOfMatch: objectId('playerOfMatch').optional(),
+  expectedVersion: Joi.number().integer().min(0).required(),
   idempotencyKey: Joi.string().trim().min(3).max(120).optional(),
 });
 

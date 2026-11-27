@@ -26,7 +26,8 @@ export const getPaginationParams = (
   query: Record<string, any> = {},
   defaultLimit: number = 10,
   maxLimit: number = 100,
-  defaultSort: string = '-createdAt'
+  defaultSort: string = '-createdAt',
+  allowedSortFields: string[] = []
 ): IPaginationParams => {
   const rawPage = parseInt(query.page as string, 10);
   const rawLimit = parseInt(query.limit as string, 10);
@@ -39,15 +40,35 @@ export const getPaginationParams = (
 
   const skip = (page - 1) * limit;
 
-  // Handle sort parsing (e.g. ?sort=-createdAt,name or ?sort=field&order=desc)
-  let sort: Record<string, 1 | -1> | string = defaultSort;
+  const normalizeSort = (value: string): Record<string, 1 | -1> | string => {
+    const raw = String(value || '').trim();
+    if (!raw) return defaultSort;
+    const parts = raw.split(',').map((p) => p.trim()).filter(Boolean);
+    if (!parts.length) return defaultSort;
+    if (allowedSortFields.length > 0) {
+      const sanitized: Record<string, 1 | -1> = {};
+      for (const part of parts) {
+        const desc = part.startsWith('-');
+        const field = (desc ? part.slice(1) : part).trim();
+        if (!field || !allowedSortFields.includes(field)) continue;
+        sanitized[field] = desc ? -1 : 1;
+      }
+      return Object.keys(sanitized).length > 0 ? sanitized : defaultSort;
+    }
+    return raw;
+  };
+
+  let sort: Record<string, 1 | -1> | string = normalizeSort(defaultSort);
   if (query.sort && typeof query.sort === 'string') {
     const sortField = query.sort.trim();
-    if (query.order && typeof query.order === 'string') {
-      const orderDirection = query.order.toLowerCase() === 'asc' ? 1 : -1;
-      sort = { [sortField]: orderDirection };
+    if (query.order && typeof query.order === 'string' && allowedSortFields.length > 0) {
+      const field = sortField.replace(/^-/, '');
+      if (allowedSortFields.includes(field)) {
+        const orderDirection = query.order.toLowerCase() === 'asc' ? 1 : -1;
+        sort = { [field]: orderDirection };
+      }
     } else {
-      sort = sortField;
+      sort = normalizeSort(sortField);
     }
   }
 

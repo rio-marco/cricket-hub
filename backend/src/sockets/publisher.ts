@@ -46,9 +46,29 @@ export const NOTIFICATION_EVENTS = {
 export const userRoom = (userId: string): string => `user:${userId}`;
 
 let io: MatchSocketServer | null = null;
-const publishedEvents = new Set<string>();
-const publishedNotificationEvents = new Set<string>();
+const publishedEvents = new Map<string, number>();
+const publishedNotificationEvents = new Map<string, number>();
+const publishedAuctionEvents = new Map<string, number>();
 const MAX_PUBLISHED_EVENTS = 1000;
+const PUBLISHED_EVENT_TTL_MS = 10 * 60 * 1000;
+
+const rememberPublished = (store: Map<string, number>, eventId: string): boolean => {
+  const now = Date.now();
+  for (const [key, ts] of store) {
+    if (now - ts > PUBLISHED_EVENT_TTL_MS || store.size > MAX_PUBLISHED_EVENTS) {
+      store.delete(key);
+    } else {
+      break;
+    }
+  }
+  if (store.has(eventId)) return false;
+  store.set(eventId, now);
+  if (store.size > MAX_PUBLISHED_EVENTS) {
+    const oldest = store.keys().next().value as string | undefined;
+    if (oldest) store.delete(oldest);
+  }
+  return true;
+};
 
 export const setSocketServer = (server: MatchSocketServer): void => {
   io = server;
@@ -64,14 +84,7 @@ export const publishNotificationEvent = (
   if (!io || !userId) return;
 
   const eventId = typeof payload.eventId === 'string' ? payload.eventId : '';
-  if (eventId) {
-    if (publishedNotificationEvents.has(eventId)) return;
-    publishedNotificationEvents.add(eventId);
-    if (publishedNotificationEvents.size > MAX_PUBLISHED_EVENTS) {
-      const oldest = publishedNotificationEvents.values().next().value as string | undefined;
-      if (oldest) publishedNotificationEvents.delete(oldest);
-    }
-  }
+  if (eventId && !rememberPublished(publishedNotificationEvents, eventId)) return;
 
   const emitter = io.to(userRoom(userId)) as unknown as {
     emit: (name: string, data: RealtimePayload) => void;
@@ -122,12 +135,7 @@ export const publishScoringEvent = (commit: ScoringCommit | undefined, state: an
 
   const base = envelope(commit);
   const eventKey = String(base.eventId);
-  if (publishedEvents.has(eventKey)) return;
-  publishedEvents.add(eventKey);
-  if (publishedEvents.size > MAX_PUBLISHED_EVENTS) {
-    const oldest = publishedEvents.values().next().value as string | undefined;
-    if (oldest) publishedEvents.delete(oldest);
-  }
+  if (!rememberPublished(publishedEvents, eventKey)) return;
 
   const room = viewerRoom(commit.matchId);
   const emit = (event: keyof ServerToClientEvents, payload: RealtimePayload): void => {
@@ -176,6 +184,8 @@ export const publishScoringEvent = (commit: ScoringCommit | undefined, state: an
       ...base,
       undoneDeliveryId: commit.undoneDeliveryId,
       delivery: deliveryPayload(delivery),
+      inningsCompleted,
+      matchCompleted,
     });
   }
 
@@ -184,6 +194,8 @@ export const publishScoringEvent = (commit: ScoringCommit | undefined, state: an
       ...base,
       correctedDeliveryId: commit.correctedDeliveryId,
       delivery: deliveryPayload(delivery),
+      inningsCompleted,
+      matchCompleted,
     });
   }
 
@@ -235,8 +247,6 @@ export const AUCTION_EVENTS = {
 export const auctionRoom = (auctionId: string): string => `auction:${auctionId}`;
 export const auctionControllerRoom = (auctionId: string): string => `auction:${auctionId}:controllers`;
 
-const publishedAuctionEvents = new Set<string>();
-
 const auctionEnvelope = (commit: AuctionCommit): RealtimePayload => ({
   eventId: `${commit.auctionId}:${commit.requestKey}:${commit.kind}`,
   auctionId: commit.auctionId,
@@ -262,17 +272,52 @@ const auctionEventFor = (commit: AuctionCommit): string | undefined => {
   return mapping[commit.kind];
 };
 
+const redactAuctionFinancialsForBroadcast = (state: any): any => {
+  if (!state || typeof state !== 'object') return state;
+  const stripPlayer = (player: any) =>
+    player && typeof player === 'object'
+      ? { ...player, basePrice: undefined, currentBid: undefined, soldPrice: undefined, bidCount: undefined, financialsRestricted: true }
+      : player;
+  const stripBid = (bid: any) =>
+    bid && typeof bid === 'object'
+      ? { ...bid, amount: undefined, financialsRestricted: true, auctionPlayer: stripPlayer(bid.auctionPlayer) }
+      : bid;
+  const stripTeam = (team: any) =>
+    team && typeof team === 'object'
+      ? {
+          ...team,
+          initialBudget: undefined,
+          spent: undefined,
+          pendingCommitment: undefined,
+          remainingBudget: undefined,
+          availableBudget: undefined,
+          maxAffordableBid: undefined,
+          financialsRestricted: true,
+        }
+      : team;
+  return {
+    ...state,
+    currentPlayer: stripPlayer(state.currentPlayer),
+    players: Array.isArray(state.players) ? state.players.map(stripPlayer) : state.players,
+    bids: Array.isArray(state.bids) ? state.bids.map(stripBid) : state.bids,
+    teams: Array.isArray(state.teams) ? state.teams.map(stripTeam) : state.teams,
+    results: state.results
+      ? {
+          ...state.results,
+          sold: Array.isArray(state.results.sold) ? state.results.sold.map(stripPlayer) : state.results.sold,
+          unsold: Array.isArray(state.results.unsold) ? state.results.unsold.map(stripPlayer) : state.results.unsold,
+        }
+      : state.results,
+    permissions: undefined,
+  };
+};
+
 export const publishAuctionEvent = (commit: AuctionCommit | undefined, state: any): void => {
   if (!io || !commit?.committed) return;
 
   const base = auctionEnvelope(commit);
   const eventKey = String(base.eventId);
-  if (publishedAuctionEvents.has(eventKey)) return;
-  publishedAuctionEvents.add(eventKey);
-  if (publishedAuctionEvents.size > MAX_PUBLISHED_EVENTS) {
-    const oldest = publishedAuctionEvents.values().next().value as string | undefined;
-    if (oldest) publishedAuctionEvents.delete(oldest);
-  }
+  if (!rememberPublished(publishedAuctionEvents, eventKey)) return;
 
   const emit = (event: string, payload: RealtimePayload): void => {
     if (!io) return;
@@ -282,19 +327,21 @@ export const publishAuctionEvent = (commit: AuctionCommit | undefined, state: an
     emitter.emit(event, payload);
   };
 
+  const safeState = redactAuctionFinancialsForBroadcast(state);
   const detail = {
     ...base,
     auctionPlayerId: commit.auctionPlayerId,
     bidId: commit.bidId,
     teamId: commit.teamId,
-    amount: commit.amount,
+    // Do not broadcast bid amounts in room-wide events; authorized clients should fetch/sync state.
+    amount: undefined,
     sequenceNumber: commit.sequenceNumber,
     decision: commit.decision,
-    currentPlayer: state?.currentPlayer,
-    teams: state?.teams,
+    currentPlayer: safeState?.currentPlayer,
+    teams: safeState?.teams,
   };
 
-  emit(AUCTION_EVENTS.state, { ...base, state });
+  emit(AUCTION_EVENTS.state, { ...base, state: safeState });
   const event = auctionEventFor(commit);
   if (event) emit(event, detail);
 };

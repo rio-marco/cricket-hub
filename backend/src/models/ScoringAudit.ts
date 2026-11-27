@@ -6,6 +6,7 @@ export enum ScoringAuditAction {
   UNDO = 'UNDO',
   CORRECT = 'CORRECT',
   INNINGS_END = 'INNINGS_END',
+  MATCH_COMPLETE = 'MATCH_COMPLETE',
 }
 
 export interface IScoringAudit {

@@ -67,8 +67,11 @@ class ApiClient {
                 requestOptions.path.contains(ApiEndpoints.refreshToken) ||
                 requestOptions.extra['isRetry'] == true ||
                 _isPublicAuthPath(requestOptions.path);
+            final method = requestOptions.method.toUpperCase();
+            const idempotentMethods = {'GET', 'HEAD', 'OPTIONS'};
+            final canRetry = idempotentMethods.contains(method);
 
-            if (!isRefreshRequest) {
+            if (!isRefreshRequest && canRetry) {
               final refreshed = await _attemptTokenRefresh();
               if (refreshed) {
                 try {
@@ -109,14 +112,15 @@ class ApiClient {
     );
 
     // 2. Logging Interceptor (debug/configured environments)
+    // Avoid logging request/response bodies or auth headers to reduce sensitive data exposure.
     if (_config.enableLogging || kDebugMode) {
       _dio.interceptors.add(
         LogInterceptor(
           request: true,
           requestHeader: false,
-          requestBody: true,
+          requestBody: false,
           responseHeader: false,
-          responseBody: true,
+          responseBody: false,
           error: true,
           logPrint: (obj) {
             debugPrint('[CricketHub API] $obj');

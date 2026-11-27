@@ -47,6 +47,7 @@ const sanitize = (value: any): any => {
   delete object.password;
   delete object.otp;
   delete object.fcmToken;
+  delete object.authLockout;
   delete object.__v;
   return object;
 };
@@ -55,7 +56,7 @@ const maskIdentifier = (value?: string): string =>
   value && value.length > 3 ? `${'*'.repeat(Math.max(0, value.length - 3))}${value.slice(-3)}` : '***';
 
 const paginationOf = (query: Record<string, any>, fields: string[], defaultSort: string) => {
-  const { page, limit, skip } = getPaginationParams(query, 20, 100, `-${defaultSort}`);
+  const { page, limit, skip } = getPaginationParams(query, 20, 100, `-${defaultSort}`, fields);
   return { page, limit, skip, sort: resolveSort(query, fields, defaultSort) };
 };
 
@@ -255,6 +256,68 @@ export class AdminService {
     return sanitize(user);
   }
 
+  async legacyGetAllUsers(query: Record<string, any> = {}): Promise<AdminListResult> {
+    return this.listUsers(query);
+  }
+
+  async legacyGetUserById(id: string): Promise<any> {
+    return this.getUserById(id);
+  }
+
+  async legacyUpdateUser(req: Request, id: string, data: any): Promise<any> {
+    if (!isObjectId(id)) throw ApiError.badRequest('Invalid user ID.');
+    const user = await User.findById(id);
+    if (!user) throw ApiError.notFound('User not found.');
+    const before = sanitize(user);
+
+    const { name, email, phone, role, isVerified, isBlocked, reason } = data || {};
+    if (email && String(email).toLowerCase() !== String(user.email || '').toLowerCase()) {
+      const emailExists = await User.findOne({ email: String(email).toLowerCase(), _id: { $ne: user._id } });
+      if (emailExists) throw ApiError.conflict('Email address already in use by another user.');
+      user.email = String(email).toLowerCase().trim();
+    }
+    if (phone && String(phone) !== String(user.phone || '')) {
+      const phoneExists = await User.findOne({ phone: String(phone), _id: { $ne: user._id } });
+      if (phoneExists) throw ApiError.conflict('Phone number already in use by another user.');
+      user.phone = String(phone).trim();
+    }
+    if (name !== undefined) user.name = String(name).trim();
+    if (role !== undefined) user.role = role;
+    if (isVerified !== undefined) user.isVerified = Boolean(isVerified);
+    if (isBlocked !== undefined) {
+      user.isBlocked = Boolean(isBlocked);
+      if (user.isBlocked) await RefreshToken.updateMany({ user: user._id }, { isRevoked: true });
+    }
+    await user.save();
+
+    await this.audit(
+      req,
+      AdminAction.USER_UPDATED,
+      { type: 'USER', id },
+      { name: before.name, email: before.email, phone: before.phone, role: before.role, isBlocked: before.isBlocked, isVerified: before.isVerified },
+      { name: user.name, email: user.email, phone: user.phone, role: user.role, isBlocked: user.isBlocked, isVerified: user.isVerified },
+      reason
+    );
+
+    return sanitize(user);
+  }
+
+  async legacyBlockUser(req: Request, id: string, isBlocked: boolean | undefined, reason?: string): Promise<{ userId: string; isBlocked: boolean }> {
+    const shouldBlock = isBlocked === undefined ? true : Boolean(isBlocked);
+    const result = await this.setUserStatus(req, id, shouldBlock, reason || 'Legacy admin action');
+    return { userId: String(result.user._id || id), isBlocked: Boolean(result.user.isBlocked) };
+  }
+
+  async legacyDeleteUser(req: Request, id: string, reason?: string): Promise<{ userId: string; deleted: boolean }> {
+    const result = await this.setUserStatus(req, id, true, reason || 'Legacy admin delete');
+    await this.audit(req, AdminAction.USER_DELETED, { type: 'USER', id }, undefined, { deleted: true, isBlocked: true }, reason);
+    return { userId: String(result.user._id || id), deleted: true };
+  }
+
+  async legacyGetDashboardStats(): Promise<any> {
+    return this.getDashboard();
+  }
+
   async setUserStatus(
     req: Request,
     id: string,
@@ -304,101 +367,6 @@ export class AdminService {
     return { user: sanitize(user) };
   }
 
-  async legacyUpdateUser(
-    req: Request,
-    id: string,
-    data: { name?: string; email?: string; phone?: string; role?: string; isVerified?: boolean; isBlocked?: boolean; reason?: string }
-  ): Promise<any> {
-    if (!isObjectId(id)) throw ApiError.badRequest('Invalid user ID.');
-    const user = await User.findById(id);
-    if (!user) throw ApiError.notFound('User not found.');
-
-    const before = sanitize(user);
-    if (data.email && data.email.toLowerCase() !== user.email) {
-      const conflict = await User.findOne({ email: data.email.toLowerCase(), _id: { $ne: user._id } });
-      if (conflict) throw ApiError.conflict('Email address already in use by another user.');
-      user.email = data.email.toLowerCase().trim();
-    }
-    if (data.phone && data.phone !== user.phone) {
-      const conflict = await User.findOne({ phone: data.phone, _id: { $ne: user._id } });
-      if (conflict) throw ApiError.conflict('Phone number already in use by another user.');
-      user.phone = data.phone.trim();
-    }
-    if (data.name !== undefined) user.name = data.name.trim();
-    if (data.role !== undefined) user.role = data.role;
-    if (data.isVerified !== undefined) user.isVerified = Boolean(data.isVerified);
-    if (data.isBlocked !== undefined) user.isBlocked = Boolean(data.isBlocked);
-    await user.save();
-
-    if ((data.isBlocked !== undefined && user.isBlocked) || (data.role !== undefined && data.role !== before.role)) {
-      await RefreshToken.updateMany({ user: user._id }, { isRevoked: true });
-    }
-
-    await this.audit(
-      req,
-      AdminAction.USER_UPDATED,
-      { type: 'USER', id },
-      before,
-      sanitize(user),
-      data.reason || 'Legacy administrative profile update',
-      { endpoint: 'legacy-update-user' }
-    );
-
-    return sanitize(user);
-  }
-
-  async legacyBlockUser(
-    req: Request,
-    id: string,
-    isBlocked?: boolean,
-    reason?: string
-  ): Promise<{ userId: string; isBlocked: boolean }> {
-    if (!isObjectId(id)) throw ApiError.badRequest('Invalid user ID.');
-    const user = await User.findById(id);
-    if (!user) throw ApiError.notFound('User not found.');
-
-    const before = Boolean(user.isBlocked);
-    const shouldBlock = isBlocked === undefined ? !before : Boolean(isBlocked);
-    user.isBlocked = shouldBlock;
-    await user.save();
-    if (shouldBlock) await RefreshToken.updateMany({ user: user._id }, { isRevoked: true });
-
-    await this.audit(
-      req,
-      AdminAction.USER_STATUS_CHANGED,
-      { type: 'USER', id },
-      { isBlocked: before },
-      { isBlocked: shouldBlock },
-      reason || 'Legacy administrative status update',
-      { endpoint: 'legacy-block-user' }
-    );
-
-    return { userId: String(user._id), isBlocked: shouldBlock };
-  }
-
-  async softDeleteUser(req: Request, id: string): Promise<{ userId: string; deleted: boolean }> {
-    if (!isObjectId(id)) throw ApiError.badRequest('Invalid user ID.');
-    const user = await User.findById(id);
-    if (!user) throw ApiError.notFound('User not found.');
-
-    const before = Boolean(user.isBlocked);
-    user.isBlocked = true;
-    await user.save();
-    await RefreshToken.updateMany({ user: user._id }, { isRevoked: true });
-
-    await this.audit(
-      req,
-      AdminAction.USER_STATUS_CHANGED,
-      { type: 'USER', id },
-      { isBlocked: before },
-      { isBlocked: true },
-      'Administrative soft delete',
-      { softDeleted: true }
-    );
-
-    return { userId: String(user._id), deleted: true };
-  }
-
   async listTeams(query: Record<string, any> = {}): Promise<AdminListResult> {
     const { page, limit, skip, sort } = paginationOf(
       query,
@@ -412,7 +380,7 @@ export class AdminService {
 
     const [teams, total] = await Promise.all([
       Team.find(filter)
-        .populate('owner', 'name email avatar')
+        .populate('owner', 'name avatar')
         .sort(sort as any)
         .skip(skip)
         .limit(limit)
@@ -425,7 +393,7 @@ export class AdminService {
   async getTeamById(id: string): Promise<any> {
     if (!isObjectId(id)) throw ApiError.badRequest('Invalid team ID.');
     const team = await Team.findById(id)
-      .populate('owner', 'name email avatar')
+      .populate('owner', 'name avatar')
       .populate('captain', 'playingRole jerseyNumber')
       .lean();
     if (!team) throw ApiError.notFound('Team not found.');
@@ -593,7 +561,7 @@ export class AdminService {
         .populate('teamA', 'name logo location')
         .populate('teamB', 'name logo location')
         .populate('tournament', 'name format matchFormat')
-        .populate('scorer', 'name email avatar')
+        .populate('scorer', 'name avatar')
         .populate('result.winner', 'name logo')
         .sort(sort as any)
         .skip(skip)
@@ -891,67 +859,107 @@ export class AdminService {
     return paginate(matches, total, page, limit);
   }
 
-  async getReport(query: { report: string; from: Date | string; to: Date | string }): Promise<any> {
+  async getReport(query: { report: string; from: Date | string; to: Date | string; page?: number; limit?: number }): Promise<any> {
     const from = new Date(query.from);
     const to = new Date(query.to);
     const createdAt = { $gte: from, $lte: to };
     const report = String(query.report);
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(500, Math.max(1, Number(query.limit) || 100));
+    const skip = (page - 1) * limit;
+
+    const build = async (rows: any[], total: number) => ({
+      report, from, to, total, rows,
+      pagination: buildPaginationResponse(total, page, limit),
+    });
 
     if (report === 'registrations') {
-      const users = await User.find({ createdAt })
-        .select('name email phone role isVerified isBlocked createdAt')
-        .sort({ createdAt: -1 })
-        .lean();
-      return { report, from, to, total: users.length, rows: users.map(sanitize) };
+      const [users, total] = await Promise.all([
+        User.find({ createdAt })
+          .select('name email phone role isVerified isBlocked createdAt')
+          .sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+        User.countDocuments({ createdAt }),
+      ]);
+      return build(users.map(sanitize), total);
     }
     if (report === 'tournaments') {
-      const tournaments = await Tournament.find({ createdAt })
-        .populate('organizer', 'name email')
-        .sort({ createdAt: -1 })
-        .lean();
-      return { report, from, to, total: tournaments.length, rows: tournaments };
+      const [tournaments, total] = await Promise.all([
+        Tournament.find({ createdAt }).populate('organizer', 'name avatar').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+        Tournament.countDocuments({ createdAt }),
+      ]);
+      return build(tournaments, total);
     }
     if (report === 'matches') {
-      const matches = await Match.find({ createdAt })
-        .populate('teamA', 'name')
-        .populate('teamB', 'name')
-        .populate('tournament', 'name')
-        .sort({ createdAt: -1 })
-        .lean();
-      return { report, from, to, total: matches.length, rows: matches };
+      const [matches, total] = await Promise.all([
+        Match.find({ createdAt })
+          .populate('teamA', 'name').populate('teamB', 'name').populate('tournament', 'name')
+          .sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+        Match.countDocuments({ createdAt }),
+      ]);
+      return build(matches, total);
     }
     if (report === 'teams') {
-      const teams = await Team.find({ createdAt }).populate('owner', 'name email').sort({ createdAt: -1 }).lean();
-      return { report, from, to, total: teams.length, rows: teams };
+      const [teams, total] = await Promise.all([
+        Team.find({ createdAt }).populate('owner', 'name avatar').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+        Team.countDocuments({ createdAt }),
+      ]);
+      return build(teams, total);
     }
     if (report === 'players') {
-      const players = await Player.find({ createdAt })
-        .populate('user', 'name email')
-        .sort({ createdAt: -1 })
-        .lean();
-      return { report, from, to, total: players.length, rows: players };
+      const [players, total] = await Promise.all([
+        Player.find({ createdAt }).populate('user', 'name avatar').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+        Player.countDocuments({ createdAt }),
+      ]);
+      return build(players, total);
     }
     throw ApiError.badRequest('Unsupported report type.');
   }
 
   async exportReport(query: { report: string; from: Date | string; to: Date | string }): Promise<string> {
-    const result = await this.getReport(query);
-    const rows: any[] = result.rows || [];
-    if (!rows.length) return `${result.report},from,to,total\n${result.report},${result.from.toISOString()},${result.to.toISOString()},0\n`;
+    const from = new Date(query.from);
+    const to = new Date(query.to);
+    const createdAt = { $gte: from, $lte: to };
+    const report = String(query.report);
+    const batchSize = 500;
+    let skip = 0;
+    let columns: string[] = [];
+    const lines: string[] = [];
+    let total = 0;
 
-    const columns = Array.from(
-      new Set(rows.flatMap((row) => Object.keys(sanitize(row)).filter((key) => !key.startsWith('_'))))
-    );
-    const cell = (value: unknown): string => {
-      if (value === undefined || value === null) return '';
-      const text = value instanceof Date ? value.toISOString() : String(value);
-      return `"${text.replace(/"/g, '""')}"`;
+    const fetchBatch = async (): Promise<any[]> => {
+      if (report === 'registrations') {
+        const rows = await User.find({ createdAt }).select('name email phone role isVerified isBlocked createdAt').sort({ createdAt: -1 }).skip(skip).limit(batchSize).lean();
+        return rows.map(sanitize);
+      }
+      if (report === 'tournaments') return Tournament.find({ createdAt }).populate('organizer', 'name avatar').sort({ createdAt: -1 }).skip(skip).limit(batchSize).lean();
+      if (report === 'matches') return Match.find({ createdAt }).populate('teamA', 'name').populate('teamB', 'name').populate('tournament', 'name').sort({ createdAt: -1 }).skip(skip).limit(batchSize).lean();
+      if (report === 'teams') return Team.find({ createdAt }).populate('owner', 'name avatar').sort({ createdAt: -1 }).skip(skip).limit(batchSize).lean();
+      if (report === 'players') return Player.find({ createdAt }).populate('user', 'name avatar').sort({ createdAt: -1 }).skip(skip).limit(batchSize).lean();
+      throw ApiError.badRequest('Unsupported report type.');
     };
-    const lines = [columns.join(',')];
-    rows.forEach((row) => {
-      const value = sanitize(row);
-      lines.push(columns.map((column) => cell(value[column])).join(','));
-    });
+
+    while (true) {
+      const rows = await fetchBatch();
+      if (!rows.length) break;
+      total += rows.length;
+      if (columns.length === 0) {
+        columns = Array.from(new Set(rows.flatMap((row) => Object.keys(sanitize(row)).filter((key) => !key.startsWith('_')))));
+        lines.push(columns.join(','));
+      }
+      const cell = (value: unknown): string => {
+        if (value === undefined || value === null) return '';
+        const text = value instanceof Date ? value.toISOString() : String(value);
+        return `"${text.replace(/"/g, '""')}"`;
+      };
+      for (const row of rows) {
+        const value = sanitize(row);
+        lines.push(columns.map((column) => cell(value[column])).join(','));
+      }
+      if (rows.length < batchSize) break;
+      skip += batchSize;
+    }
+
+    if (total === 0) return `${report},from,to,total\n${report},${from.toISOString()},${to.toISOString()},0\n`;
     return lines.join('\n');
   }
 }

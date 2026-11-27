@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -10,13 +11,13 @@ import '../../../../core/routing/app_router.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../domain/entities/app_notification.dart';
+import '../../data/services/push_notification_service.dart';
 import '../../domain/entities/notification_preferences.dart';
 import '../../domain/repositories/notifications_repository.dart';
 import '../../data/datasources/notifications_remote_datasource.dart';
 import '../../data/realtime/notification_realtime_client.dart';
 import '../../data/realtime/notification_realtime_event.dart';
 import '../../data/repositories/notifications_repository_impl.dart';
-import '../../data/services/push_notification_service.dart';
 
 enum NotificationReadFilter { all, unread, read }
 
@@ -68,7 +69,7 @@ class NotificationListNotifier extends StateNotifier<NotificationListState> {
   final Future<void> Function() _onUnreadChanged;
 
   NotificationListNotifier(this._repository, this._onUnreadChanged)
-      : super(const NotificationListState());
+    : super(const NotificationListState());
 
   Future<void> load({bool refresh = false}) async {
     final current = state;
@@ -184,9 +185,12 @@ class NotificationListNotifier extends StateNotifier<NotificationListState> {
             event.name == 'notification:unread-count') &&
         notification != null) {
       _replace(notification);
-      if (state.filter == NotificationReadFilter.unread && notification.isRead) {
+      if (state.filter == NotificationReadFilter.unread &&
+          notification.isRead) {
         state = state.copyWith(
-          items: state.items.where((item) => item.id != notification.id).toList(),
+          items: state.items
+              .where((item) => item.id != notification.id)
+              .toList(),
           total: state.total > 0 ? state.total - 1 : 0,
         );
       }
@@ -272,118 +276,157 @@ class PushNotificationNotifier extends StateNotifier<AsyncValue<bool>> {
 
 final notificationsRemoteDataSourceProvider =
     Provider<NotificationsRemoteDataSource>((ref) {
-  final apiClient = ref.watch(apiClientProvider);
-  return NotificationsRemoteDataSourceImpl(apiClient);
-});
+      final apiClient = ref.watch(apiClientProvider);
+      return NotificationsRemoteDataSourceImpl(apiClient);
+    });
 
-final notificationsRepositoryProvider = Provider<NotificationsRepository>((ref) {
+final notificationsRepositoryProvider = Provider<NotificationsRepository>((
+  ref,
+) {
   final remoteDataSource = ref.watch(notificationsRemoteDataSourceProvider);
   return NotificationsRepositoryImpl(remoteDataSource: remoteDataSource);
 });
 
-final notificationRealtimeClientProvider =
-    Provider<NotificationRealtimeClient>((ref) {
-  final config = ref.watch(appConfigProvider);
-  final storage = ref.watch(secureStorageProvider);
-  final client = SocketIONotificationRealtimeClient(
-    url: config.socketUrl,
-    tokenProvider: SecureStorageNotificationRealtimeTokenProvider(storage),
-  );
+final notificationRealtimeClientProvider = Provider<NotificationRealtimeClient>(
+  (ref) {
+    final config = ref.watch(appConfigProvider);
+    final storage = ref.watch(secureStorageProvider);
+    final client = SocketIONotificationRealtimeClient(
+      url: config.socketUrl,
+      tokenProvider: SecureStorageNotificationRealtimeTokenProvider(storage),
+    );
 
-  ref.keepAlive();
-  ref.onDispose(() => unawaited(client.dispose()));
+    ref.keepAlive();
+    ref.onDispose(() => unawaited(client.dispose()));
 
-  final currentAuth = ref.read(authStateProvider);
-  if (currentAuth is Authenticated) unawaited(client.connect());
+    final currentAuth = ref.read(authStateProvider);
+    if (currentAuth is Authenticated) unawaited(client.connect());
 
-  ref.listen<AuthState>(authStateProvider, (_, auth) {
-    if (auth is Authenticated) {
-      unawaited(client.connect());
-    } else {
-      client.disconnect();
-    }
-  });
+    ref.listen<AuthState>(authStateProvider, (_, auth) {
+      if (auth is Authenticated) {
+        unawaited(client.connect());
+      } else {
+        client.disconnect();
+      }
+    });
 
-  return client;
-});
+    return client;
+  },
+);
 
 final unreadCountProvider =
     StateNotifierProvider<UnreadCountNotifier, AsyncValue<int>>((ref) {
-  final repository = ref.watch(notificationsRepositoryProvider);
-  final realtime = ref.watch(notificationRealtimeClientProvider);
-  final notifier = UnreadCountNotifier(repository);
+      final repository = ref.watch(notificationsRepositoryProvider);
+      final realtime = ref.watch(notificationRealtimeClientProvider);
+      final notifier = UnreadCountNotifier(repository);
 
-  final currentAuth = ref.read(authStateProvider);
-  if (currentAuth is Authenticated) unawaited(notifier.refresh());
+      final currentAuth = ref.read(authStateProvider);
+      if (currentAuth is Authenticated) unawaited(notifier.refresh());
 
-  ref.listen<AuthState>(authStateProvider, (_, auth) {
-    if (auth is Authenticated) {
-      unawaited(notifier.refresh());
-    } else {
-      notifier.reset();
-    }
-  });
+      ref.listen<AuthState>(authStateProvider, (previous, auth) {
+        if (auth is Authenticated) {
+          if (previous is! Authenticated || previous.user.id != auth.user.id) {
+            notifier.reset();
+          }
+          unawaited(notifier.refresh());
+        } else {
+          notifier.reset();
+        }
+      });
 
-  final subscription = realtime.events.listen((event) {
-    if (event.name == 'notification:error') return;
-    if (event.unreadCount != null) {
-      notifier.setCount(event.unreadCount!);
-      return;
-    }
-    if (event.name == 'notification:new' ||
-        event.name == 'notification:read') {
-      unawaited(notifier.refresh());
-    }
-  });
-  ref.onDispose(subscription.cancel);
+      var hasConnectedBefore = realtime.isConnected;
+      final subscription = realtime.events.listen((event) {
+        if (event.name == 'notification:error') return;
+        if (event.name == 'notification:connection') {
+          final connected = event.data['connected'] == true;
+          if (connected) {
+            if (hasConnectedBefore) {
+              unawaited(notifier.refresh());
+            }
+            hasConnectedBefore = true;
+          }
+          return;
+        }
+        if (event.unreadCount != null) {
+          notifier.setCount(event.unreadCount!);
+          return;
+        }
+        if (event.name == 'notification:new' ||
+            event.name == 'notification:read') {
+          unawaited(notifier.refresh());
+        }
+      });
+      ref.onDispose(subscription.cancel);
 
-  return notifier;
-});
+      return notifier;
+    });
 
 final notificationListProvider =
-    StateNotifierProvider<NotificationListNotifier, NotificationListState>((ref) {
-  final repository = ref.watch(notificationsRepositoryProvider);
-  final realtime = ref.watch(notificationRealtimeClientProvider);
-  final notifier = NotificationListNotifier(
-    repository,
-    () => ref.read(unreadCountProvider.notifier).refresh(),
-  );
+    StateNotifierProvider<NotificationListNotifier, NotificationListState>((
+      ref,
+    ) {
+      final repository = ref.watch(notificationsRepositoryProvider);
+      final realtime = ref.watch(notificationRealtimeClientProvider);
+      final notifier = NotificationListNotifier(
+        repository,
+        () => ref.read(unreadCountProvider.notifier).refresh(),
+      );
 
-  final currentAuth = ref.read(authStateProvider);
-  if (currentAuth is Authenticated) unawaited(notifier.load(refresh: true));
+      final currentAuth = ref.read(authStateProvider);
+      if (currentAuth is Authenticated) unawaited(notifier.load(refresh: true));
 
-  ref.listen<AuthState>(authStateProvider, (_, auth) {
-    if (auth is Authenticated) {
-      unawaited(notifier.load(refresh: true));
-    } else {
-      notifier.reset();
+      ref.listen<AuthState>(authStateProvider, (previous, auth) {
+        if (auth is Authenticated) {
+          if (previous is! Authenticated || previous.user.id != auth.user.id) {
+            notifier.reset();
+          }
+          unawaited(notifier.load(refresh: true));
+        } else {
+          notifier.reset();
+        }
+      });
+
+      var hasConnectedBefore = realtime.isConnected;
+      final subscription = realtime.events.listen((event) {
+        if (event.name == 'notification:error') return;
+        if (event.name == 'notification:connection') {
+          final connected = event.data['connected'] == true;
+          if (connected) {
+            if (hasConnectedBefore) {
+              unawaited(notifier.load(refresh: true));
+              unawaited(ref.read(unreadCountProvider.notifier).refresh());
+            }
+            hasConnectedBefore = true;
+          }
+          return;
+        }
+        notifier.applyRealtimeEvent(event);
+      });
+      ref.onDispose(subscription.cancel);
+
+      return notifier;
+    });
+
+final notificationPreferencesProvider = FutureProvider<NotificationPreferences>(
+  (ref) async {
+    final auth = ref.watch(authStateProvider);
+    if (auth is! Authenticated) {
+      throw const UnauthorizedFailure();
     }
-  });
+    final repository = ref.watch(notificationsRepositoryProvider);
+    return repository.getPreferences();
+  },
+);
 
-  final subscription = realtime.events.listen((event) {
-    if (event.name == 'notification:error') return;
-    notifier.applyRealtimeEvent(event);
-  });
-  ref.onDispose(subscription.cancel);
-
-  return notifier;
-});
-
-final notificationPreferencesProvider =
-    FutureProvider<NotificationPreferences>((ref) async {
-  final auth = ref.watch(authStateProvider);
-  if (auth is! Authenticated) {
-    throw const UnauthorizedFailure();
-  }
-  final repository = ref.watch(notificationsRepositoryProvider);
-  return repository.getPreferences();
-});
-
-final pushNotificationPlatformProvider = Provider<PushNotificationPlatform>((ref) {
+final pushNotificationPlatformProvider = Provider<PushNotificationPlatform>((
+  ref,
+) {
   return FirebasePushNotificationPlatform();
 });
 
-final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) {
+final pushNotificationServiceProvider = Provider<PushNotificationService>((
+  ref,
+) {
   final platform = ref.watch(pushNotificationPlatformProvider);
   final repository = ref.watch(notificationsRepositoryProvider);
   final storage = ref.watch(secureStorageProvider);
@@ -400,43 +443,104 @@ final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) 
 
 final pushNotificationsProvider =
     StateNotifierProvider<PushNotificationNotifier, AsyncValue<bool>>((ref) {
-  final service = ref.watch(pushNotificationServiceProvider);
-  final notifier = PushNotificationNotifier(service);
+      final service = ref.watch(pushNotificationServiceProvider);
+      final notifier = PushNotificationNotifier(service);
 
-  final currentAuth = ref.read(authStateProvider);
-  if (currentAuth is Authenticated) unawaited(notifier.initialize());
+      final currentAuth = ref.read(authStateProvider);
+      if (currentAuth is Authenticated) unawaited(notifier.initialize());
 
-  ref.listen<AuthState>(authStateProvider, (previous, auth) {
-    if (auth is Authenticated &&
-        (previous is! Authenticated || previous.user.id != auth.user.id)) {
-      unawaited(notifier.initialize());
-    } else if (auth is! Authenticated) {
-      unawaited(notifier.unregister());
-    }
-  });
+      ref.listen<AuthState>(authStateProvider, (previous, auth) {
+        if (auth is Authenticated &&
+            (previous is! Authenticated || previous.user.id != auth.user.id)) {
+          unawaited(notifier.initialize());
+        } else if (auth is! Authenticated) {
+          unawaited(notifier.unregister());
+        }
+      });
 
-  final messageSubscription = service.messages.listen((_) {
-    unawaited(ref.read(unreadCountProvider.notifier).refresh());
-    if (ref.read(authStateProvider) is Authenticated) {
-      unawaited(ref.read(notificationListProvider.notifier).load(refresh: true));
-    }
-  });
-  final tapSubscription = service.taps.listen((_) {
-    final context = rootNavigatorKey.currentContext;
-    if (context != null && context.mounted) {
-      context.push(AppRoutes.notifications);
-    }
-  });
+      var lastTapKey = '';
+      var lastTapAt = DateTime.fromMillisecondsSinceEpoch(0);
+      final messageSubscription = service.messages.listen((_) {
+        unawaited(ref.read(unreadCountProvider.notifier).refresh());
+        if (ref.read(authStateProvider) is Authenticated) {
+          unawaited(
+            ref.read(notificationListProvider.notifier).load(refresh: true),
+          );
+        }
+      });
+      final tapSubscription = service.taps.listen((message) {
+        final context = rootNavigatorKey.currentContext;
+        if (context == null || !context.mounted) return;
+        final route = _notificationRoute(message);
+        final tapKey = route ?? AppRoutes.notifications;
+        final now = DateTime.now();
+        if (tapKey == lastTapKey &&
+            now.difference(lastTapAt) < const Duration(seconds: 2)) {
+          return;
+        }
+        lastTapKey = tapKey;
+        lastTapAt = now;
+        if (route == null) {
+          context.push(AppRoutes.notifications);
+          return;
+        }
+        context.push(route);
+      });
 
-  ref.onDispose(() {
-    messageSubscription.cancel();
-    tapSubscription.cancel();
-  });
+      ref.onDispose(() {
+        messageSubscription.cancel();
+        tapSubscription.cancel();
+      });
 
-  return notifier;
-});
+      return notifier;
+    });
 
 String _message(Object error) {
   if (error is Failure) return error.message;
   return error.toString();
+}
+
+final _idPattern = RegExp(r'^[a-fA-F0-9]{24}$');
+
+bool _isValidId(String? value) {
+  if (value == null) return false;
+  return _idPattern.hasMatch(value.trim());
+}
+
+@visibleForTesting
+String? notificationRouteForMessage(PushNotificationMessage message) {
+  return _notificationRoute(message);
+}
+
+String? _notificationRoute(PushNotificationMessage message) {
+  final data = message.data;
+  final type = data['type']?.toString().toUpperCase();
+  final relatedType = data['relatedEntityType']?.toString().toUpperCase();
+  final relatedId = data['relatedEntityId']?.toString();
+  final matchId = data['matchId']?.toString();
+  final auctionId = data['auctionId']?.toString();
+
+  final resolvedMatchId = _isValidId(matchId)
+      ? matchId
+      : (_isValidId(relatedId) &&
+                (relatedType == 'MATCH' || type?.contains('MATCH') == true)
+            ? relatedId
+            : null);
+  final resolvedAuctionId = _isValidId(auctionId)
+      ? auctionId
+      : (_isValidId(relatedId) &&
+                (relatedType == 'AUCTION' || type?.contains('AUCTION') == true)
+            ? relatedId
+            : null);
+
+  if (type == 'AUCTION_BID' ||
+      type == 'AUCTION_OUTBID' ||
+      type == 'AUCTION_WON' ||
+      type == 'AUCTION_RESULT') {
+    if (resolvedAuctionId != null)
+      return '/auctions/$resolvedAuctionId/bidding';
+  }
+  if (resolvedAuctionId != null) return '/auctions/$resolvedAuctionId';
+  if (resolvedMatchId != null) return '/matches/$resolvedMatchId';
+  return null;
 }

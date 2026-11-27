@@ -137,8 +137,8 @@ export const logout = asyncHandler(async (req: Request, res: Response): Promise<
   if (!userId) {
     throw ApiError.unauthorized('User not authenticated.');
   }
-  const { refreshToken: token } = req.body;
-  const result = await authService.logout(userId, token);
+  const { refreshToken: token, fcmToken } = req.body as { refreshToken?: string; fcmToken?: string };
+  const result = await authService.logout(userId, token, fcmToken);
   ApiResponse.success(
     res,
     200,

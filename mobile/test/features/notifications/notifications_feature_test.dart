@@ -69,11 +69,9 @@ class FakeNotificationsRepository implements NotificationsRepository {
   Future<int> getUnreadCount() async => unreadCount;
 
   @override
-  Future<AppNotification> markAsRead(String id) async =>
-      items.firstWhere((item) => item.id == id).copyWith(
-            isRead: true,
-            readAt: DateTime.utc(2026, 1, 2),
-          );
+  Future<AppNotification> markAsRead(String id) async => items
+      .firstWhere((item) => item.id == id)
+      .copyWith(isRead: true, readAt: DateTime.utc(2026, 1, 2));
 
   @override
   Future<int> markAllAsRead() async {
@@ -95,8 +93,7 @@ class FakeNotificationsRepository implements NotificationsRepository {
   @override
   Future<NotificationPreferences> updatePreferences(
     NotificationPreferences preferences,
-  ) async =>
-      preferences;
+  ) async => preferences;
 
   @override
   Future<void> registerDeviceToken({
@@ -135,8 +132,7 @@ class FakeSecureStorage extends SecureStorage {
 }
 
 class FakePushPlatform implements PushNotificationPlatform {
-  final StreamController<String> _tokens =
-      StreamController<String>.broadcast();
+  final StreamController<String> _tokens = StreamController<String>.broadcast();
   final StreamController<PushNotificationMessage> _messages =
       StreamController<PushNotificationMessage>.broadcast();
   final StreamController<PushNotificationMessage> _taps =
@@ -266,7 +262,10 @@ void main() {
       expect(notifier.state.filter, NotificationReadFilter.unread);
 
       await notifier.markAsRead('1');
-      expect(notifier.state.items.firstWhere((item) => item.id == '1').isRead, isTrue);
+      expect(
+        notifier.state.items.firstWhere((item) => item.id == '1').isRead,
+        isTrue,
+      );
       expect(unreadRefreshes, greaterThan(0));
 
       await notifier.delete('1');
@@ -280,6 +279,7 @@ void main() {
       notifier.applyRealtimeEvent(
         NotificationRealtimeEvent(
           name: 'notification:new',
+          data: const <String, dynamic>{},
           notification: _notification('new-1'),
           unreadCount: 1,
         ),
@@ -290,6 +290,7 @@ void main() {
       notifier.applyRealtimeEvent(
         NotificationRealtimeEvent(
           name: 'notification:read',
+          data: const <String, dynamic>{},
           notification: _notification('new-1', isRead: true),
           unreadCount: 0,
         ),
@@ -331,7 +332,11 @@ void main() {
       expect(platform.foregroundOptionsCalls, 1);
       expect(repository.registeredToken, platform.token);
       expect(
-        <String>['ANDROID', 'IOS', 'WEB'].contains(repository.registeredPlatform!),
+        <String>[
+          'ANDROID',
+          'IOS',
+          'WEB',
+        ].contains(repository.registeredPlatform!),
         isTrue,
       );
 
@@ -358,6 +363,59 @@ void main() {
 
       await service.dispose();
       await platform.dispose();
+    });
+  });
+
+  group('notification tap routing', () {
+    test('routes valid match and auction payloads safely', () {
+      expect(
+        notificationRouteForMessage(const PushNotificationMessage(
+          notificationId: 'n1',
+          title: 't',
+          body: 'b',
+          data: {'type': 'MATCH_START', 'matchId': '507f1f77bcf86cd799439011'},
+        )),
+        '/matches/507f1f77bcf86cd799439011',
+      );
+      expect(
+        notificationRouteForMessage(const PushNotificationMessage(
+          notificationId: 'n2',
+          title: 't',
+          body: 'b',
+          data: {'type': 'AUCTION_BID', 'auctionId': '507f1f77bcf86cd799439012'},
+        )),
+        '/auctions/507f1f77bcf86cd799439012/bidding',
+      );
+      expect(
+        notificationRouteForMessage(const PushNotificationMessage(
+          notificationId: 'n3',
+          title: 't',
+          body: 'b',
+          data: {'type': 'AUCTION_RESULT', 'relatedEntityType': 'AUCTION', 'relatedEntityId': '507f1f77bcf86cd799439013'},
+        )),
+        '/auctions/507f1f77bcf86cd799439013/bidding',
+      );
+    });
+
+    test('rejects invalid or malformed payloads', () {
+      expect(
+        notificationRouteForMessage(const PushNotificationMessage(
+          notificationId: 'n4',
+          title: 't',
+          body: 'b',
+          data: {'type': 'MATCH_START', 'matchId': '../admin'},
+        )),
+        isNull,
+      );
+      expect(
+        notificationRouteForMessage(const PushNotificationMessage(
+          notificationId: 'n5',
+          title: 't',
+          body: 'b',
+          data: {'type': 'UNKNOWN', 'relatedEntityId': 'not-an-id'},
+        )),
+        isNull,
+      );
     });
   });
 }

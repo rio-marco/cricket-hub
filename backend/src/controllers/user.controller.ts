@@ -21,7 +21,8 @@ export const getAllUsers = asyncHandler(async (req: Request, res: Response): Pro
 
   // Search by keyword in name, email, or phone
   if (req.query.search) {
-    const searchRegex = new RegExp(String(req.query.search).trim(), 'i');
+    const safeSearch = String(req.query.search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const searchRegex = new RegExp(safeSearch, 'i');
     filter.$or = [
       { name: searchRegex },
       { email: searchRegex },
@@ -49,7 +50,7 @@ export const getAllUsers = asyncHandler(async (req: Request, res: Response): Pro
       .sort(sort as any)
       .skip(skip)
       .limit(limit)
-      .select('-password -otp')
+      .select('-password -otp -fcmToken -authLockout -__v')
       .lean(),
     User.countDocuments(filter),
   ]);
@@ -62,7 +63,7 @@ export const getAllUsers = asyncHandler(async (req: Request, res: Response): Pro
  * GET /api/v1/users/:id
  */
 export const getUserById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const user = await User.findById(req.params.id).select('-password -otp').lean();
+  const user = await User.findById(req.params.id).select('-password -otp -fcmToken -authLockout -__v').lean();
   if (!user) {
     throw ApiError.notFound('User not found.');
   }
@@ -114,6 +115,9 @@ export const updateUser = asyncHandler(async (req: Request, res: Response): Prom
   const sanitizedUser = user.toObject();
   delete (sanitizedUser as any).password;
   delete (sanitizedUser as any).otp;
+  delete (sanitizedUser as any).fcmToken;
+  delete (sanitizedUser as any).authLockout;
+  delete (sanitizedUser as any).__v;
 
   ApiResponse.success(res, 200, 'User updated successfully.', sanitizedUser);
 });
@@ -126,6 +130,9 @@ export const blockUser = asyncHandler(async (req: Request, res: Response): Promi
   const user = await User.findById(req.params.id);
   if (!user) {
     throw ApiError.notFound('User not found.');
+  }
+  if (String(user._id) === String(req.user?._id)) {
+    throw ApiError.badRequest('You cannot block your own account.');
   }
 
   // Toggle or explicitly set block status
@@ -154,6 +161,9 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response): Prom
   const user = await User.findById(req.params.id);
   if (!user) {
     throw ApiError.notFound('User not found.');
+  }
+  if (String(user._id) === String(req.user?._id)) {
+    throw ApiError.badRequest('You cannot delete your own account.');
   }
 
   // Soft delete: set isBlocked to true and revoke tokens

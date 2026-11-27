@@ -14,6 +14,7 @@ export interface IAuction {
   rules: Record<string, unknown>;
   status: AuctionStatus;
   currentPlayer?: Types.ObjectId;
+  currentPlayerOrder: number;
   stateVersion: number;
   nextSequence: number;
   startedAt?: Date;
@@ -88,6 +89,12 @@ const auctionSchema = new Schema<IAuction, AuctionModel>(
     currentPlayer: {
       type: Schema.Types.ObjectId,
       ref: 'AuctionPlayer',
+    },
+    currentPlayerOrder: {
+      type: Number,
+      default: 0,
+      min: [0, 'Current player order cannot be negative'],
+      index: true,
     },
     stateVersion: {
       type: Number,

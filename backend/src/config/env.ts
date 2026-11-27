@@ -17,6 +17,8 @@ export interface IConfig {
   OTP_MAX_ATTEMPTS: number;
   OTP_MAX_RESENDS: number;
   OTP_RESEND_COOLDOWN_SECONDS: number;
+  AUTH_LOGIN_MAX_ATTEMPTS: number;
+  AUTH_LOGIN_LOCK_MINUTES: number;
   NODE_ENV: 'development' | 'production' | 'test';
   SMS_PROVIDER: string;
   UPLOAD_DIR: string;
@@ -24,12 +26,15 @@ export interface IConfig {
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_MAX_REQUESTS: number;
   CORS_ORIGIN: string;
+  TRUST_PROXY: number | boolean;
+  ENABLE_API_DOCS: boolean;
   LOG_LEVEL: string;
   FIREBASE_PROJECT_ID: string;
   FIREBASE_CLIENT_EMAIL: string;
   FIREBASE_PRIVATE_KEY: string;
   FIREBASE_PUSH_RETRY_BATCH_SIZE: number;
   FIREBASE_PUSH_RETRY_INTERVAL_MS: number;
+  ALLOW_NON_TRANSACTIONAL_WRITES: boolean;
   isProduction: boolean;
   isDevelopment: boolean;
   isTest: boolean;
@@ -51,6 +56,8 @@ export const config: IConfig = {
   OTP_MAX_ATTEMPTS: parseInt(process.env.OTP_MAX_ATTEMPTS || '5', 10),
   OTP_MAX_RESENDS: parseInt(process.env.OTP_MAX_RESENDS || '3', 10),
   OTP_RESEND_COOLDOWN_SECONDS: parseInt(process.env.OTP_RESEND_COOLDOWN_SECONDS || '60', 10),
+  AUTH_LOGIN_MAX_ATTEMPTS: parseInt(process.env.AUTH_LOGIN_MAX_ATTEMPTS || '10', 10),
+  AUTH_LOGIN_LOCK_MINUTES: parseInt(process.env.AUTH_LOGIN_LOCK_MINUTES || '15', 10),
   NODE_ENV: nodeEnv,
   SMS_PROVIDER: process.env.SMS_PROVIDER || 'mock',
   UPLOAD_DIR: process.env.UPLOAD_DIR || 'uploads',
@@ -58,12 +65,22 @@ export const config: IConfig = {
   RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 mins default
   RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
   CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
+  TRUST_PROXY:
+    process.env.TRUST_PROXY === 'true'
+      ? true
+      : Number.isFinite(Number(process.env.TRUST_PROXY))
+        ? Number(process.env.TRUST_PROXY)
+        : nodeEnv === 'production',
+  ENABLE_API_DOCS:
+    process.env.ENABLE_API_DOCS === 'true' ||
+    (process.env.ENABLE_API_DOCS !== 'false' && nodeEnv !== 'production'),
   LOG_LEVEL: process.env.LOG_LEVEL || (nodeEnv === 'production' ? 'info' : 'debug'),
   FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || '',
   FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL || '',
   FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY || '',
   FIREBASE_PUSH_RETRY_BATCH_SIZE: parseInt(process.env.FIREBASE_PUSH_RETRY_BATCH_SIZE || '50', 10),
   FIREBASE_PUSH_RETRY_INTERVAL_MS: parseInt(process.env.FIREBASE_PUSH_RETRY_INTERVAL_MS || '60000', 10),
+  ALLOW_NON_TRANSACTIONAL_WRITES: process.env.ALLOW_NON_TRANSACTIONAL_WRITES === 'true',
   isProduction: nodeEnv === 'production',
   isDevelopment: nodeEnv === 'development',
   isTest: nodeEnv === 'test',

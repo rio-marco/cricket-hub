@@ -91,7 +91,7 @@ export class TournamentService {
    * Get all tournaments with pagination, status filter, city filter, and search
    */
   public async getTournaments(query: Record<string, any>): Promise<ITournamentListResult> {
-    const { page, limit, skip, sort } = getPaginationParams(query, 10, 100, '-createdAt');
+    const { page, limit, skip, sort } = getPaginationParams(query, 10, 100, '-createdAt', ['createdAt','updatedAt','startDate','endDate','name','status','city']);
 
     const filter: Record<string, any> = {};
 
@@ -122,7 +122,7 @@ export class TournamentService {
 
     const [tournaments, total] = await Promise.all([
       Tournament.find(filter)
-        .populate('organizer', 'name email avatar phone')
+        .populate('organizer', 'name avatar')
         .sort(sort as any)
         .skip(skip)
         .limit(limit)
@@ -147,7 +147,7 @@ export class TournamentService {
     }
 
     const tournament = await Tournament.findById(id)
-      .populate('organizer', 'name email avatar phone')
+      .populate('organizer', 'name avatar')
       .lean();
 
     if (!tournament) {
@@ -160,7 +160,7 @@ export class TournamentService {
         path: 'team',
         select: 'name logo location owner captain',
         populate: [
-          { path: 'owner', select: 'name email avatar' },
+          { path: 'owner', select: 'name avatar' },
           { path: 'captain', select: 'user', populate: { path: 'user', select: 'name avatar' } },
         ],
       })
@@ -579,7 +579,7 @@ export class TournamentService {
         path: 'team',
         select: 'name logo location owner captain viceCaptain',
         populate: [
-          { path: 'owner', select: 'name email phone avatar' },
+          { path: 'owner', select: 'name avatar' },
           { path: 'captain', select: 'user', populate: { path: 'user', select: 'name avatar' } },
         ],
       })

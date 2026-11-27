@@ -48,7 +48,9 @@ class ScoringUiState {
       snapshot: snapshot ?? this.snapshot,
       isLoading: isLoading ?? this.isLoading,
       isSaving: isSaving ?? this.isSaving,
-      errorMessage: clearErrorMessage ? null : errorMessage ?? this.errorMessage,
+      errorMessage: clearErrorMessage
+          ? null
+          : errorMessage ?? this.errorMessage,
       successMessage: clearSuccessMessage
           ? null
           : successMessage ?? this.successMessage,
@@ -62,7 +64,7 @@ class ScoringNotifier extends StateNotifier<ScoringUiState> {
   final Set<String> _seenEventIds = <String>{};
 
   ScoringNotifier(this._repository, String matchId)
-      : super(ScoringUiState(matchId: matchId)) {
+    : super(ScoringUiState(matchId: matchId)) {
     load();
   }
 
@@ -84,13 +86,22 @@ class ScoringNotifier extends StateNotifier<ScoringUiState> {
     Map<String, dynamic> incomingState, {
     String message = 'Live score updated.',
   }) {
+    final incomingInnings = _inningsNumberOf(incomingState);
+    final currentInnings = _inningsNumberOf(state.snapshot.activeInnings);
     final incomingVersion = _versionOf(incomingState);
-    final currentVersion = _versionOf(activeInnings);
-    if (incomingVersion != null &&
+    final currentVersion = _versionOf(state.snapshot.activeInnings);
+
+    final sameInnings =
+        incomingInnings == null ||
+        currentInnings == null ||
+        incomingInnings == currentInnings;
+    if (sameInnings &&
+        incomingVersion != null &&
         currentVersion != null &&
         incomingVersion < currentVersion) {
       return;
     }
+
     state = state.copyWith(
       snapshot: ScoringSnapshotModel.fromJson({'data': incomingState}),
       isSaving: false,
@@ -133,6 +144,15 @@ class ScoringNotifier extends StateNotifier<ScoringUiState> {
     final innings = normalizeMapOrNull(map?['activeInnings'] ?? map);
     final version = innings?['stateVersion'];
     if (version is num) return version.toInt();
+    return null;
+  }
+
+  int? _inningsNumberOf(dynamic value) {
+    final map = normalizeMapOrNull(value);
+    final innings = normalizeMapOrNull(map?['activeInnings'] ?? map);
+    final number = innings?['inningsNumber'];
+    if (number is num) return number.toInt();
+    if (number is String) return int.tryParse(number);
     return null;
   }
 
@@ -277,6 +297,7 @@ class ScoringNotifier extends StateNotifier<ScoringUiState> {
     required Future<ScoringSnapshot> Function() action,
     required String successMessage,
   }) async {
+    if (state.isSaving) return false;
     state = state.copyWith(isSaving: true, clearErrorMessage: true);
     try {
       final snapshot = await action();
@@ -307,7 +328,9 @@ class ScoringNotifier extends StateNotifier<ScoringUiState> {
   }
 }
 
-final scoringRemoteDataSourceProvider = Provider<ScoringRemoteDataSource>((ref) {
+final scoringRemoteDataSourceProvider = Provider<ScoringRemoteDataSource>((
+  ref,
+) {
   final apiClient = ref.watch(apiClientProvider);
   return ScoringRemoteDataSourceImpl(apiClient.dio);
 });
@@ -318,7 +341,10 @@ final scoringRepositoryProvider = Provider<ScoringRepository>((ref) {
   );
 });
 
-final scoringControllerProvider = StateNotifierProvider.family<
-    ScoringNotifier, ScoringUiState, String>((ref, matchId) {
-  return ScoringNotifier(ref.watch(scoringRepositoryProvider), matchId);
-});
+final scoringControllerProvider =
+    StateNotifierProvider.family<ScoringNotifier, ScoringUiState, String>((
+      ref,
+      matchId,
+    ) {
+      return ScoringNotifier(ref.watch(scoringRepositoryProvider), matchId);
+    });
